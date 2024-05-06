@@ -18,6 +18,7 @@ import numpy as np
 import datetime
 import xarray as xr
 from numpy.ma import masked_array
+from scipy import ndimage
 
 from netCDF4 import Dataset
 
@@ -50,10 +51,13 @@ def  SWOTspec_to_HsLm(Ekxky,kx2,ky2,swell_mask,Hhat2,trackangle)  :
         Lmp1_SWOT=m0/mp1
         Lmm1_SWOT=mm1/m0
 
-# NEED TO CHECK FOR 180° BUG ... 
+# Corrects for 180 shift in direction
+        shift180=0
+        if np.abs(trackangle) > 90: 
+          shift180=180
         cosm_SWOT=np.mean(np.multiply(kx2,E_mask).flatten())
         sinm_SWOT=np.mean(np.multiply(ky2,E_mask).flatten())
-        dm_SWOT=np.mod(90-(-trackangle+np.arctan2(sinm_SWOT,cosm_SWOT)*180/np.pi),360) # converted to direction from, nautical
+        dm_SWOT=np.mod(90-(-trackangle+shift180+np.arctan2(sinm_SWOT,cosm_SWOT)*180/np.pi),360) # converted to direction from, nautical
     else :
         Hs_SWOT=NaN,Lmm1_SWOT=NaN,Lmp1_SWOT=NaN,dm_SWOT=NaN
     return Hs_SWOT,Lmm1_SWOT,Lmp1_SWOT,dm_SWOT
@@ -181,7 +185,7 @@ def SWOTfind_model_spectrum(ds_ww3t,loncr,latcr,timec) :
 
 ###################################################################
 # modpec,inds=swell.SWOTfind_model_spectrum(ds_ww3t,loncr,latcr,timec)
-def SWOTdefine_swell_mask(Eta,coh,mask_choice,kx2,ky2,cohthr) :
+def SWOTdefine_swell_mask(Eta,coh,ang,dlat,mask_choice,kx2,ky2,kn,cohthr,cfac,medsig0,nm,n,mm,m) :
     indc=np.where((coh > cohthr))[0]
     ncoh=len(indc)
     
@@ -194,47 +198,97 @@ def SWOTdefine_swell_mask(Eta,coh,mask_choice,kx2,ky2,cohthr) :
     indc2=np.where((coh > cohthr) )[0]
     ncoh2=len(indc2)
     cohOK=1
+    maskset=0
     if ncoh2 > 3:
        ncoh=ncoh2
-    if cohthr > 0.8/cfac and ncoh > 3 and (np.nanmedian(mybos) < 40):
+    if cohthr > 0.8/cfac and ncoh > 3 and (medsig0 < 70):
        cohs=(coh/cohthr)*np.sign(np.cos(ang))*np.sign(ky2*dlat)
        amask=ndimage.binary_dilation((cohs > 1 ).astype(int))
+       maskset=1
     else:
        cohOK=0
        amask=Eta/10*np.sign(ky2*dlat)
+       maskset=2
     if (cohOK==1) or (mask_choice < 0):
        amask=Eta/10*np.sign(ky2*dlat)
        Emax=2/np.max(Eta.flatten())
        amask=Eta*Emax*np.sign(-ky2)
-    
+       maskset=3
+    print('TEST:',maskset,cohOK,mask_choice,cohthr,cohmax,ncoh,medsig0)
     ind=np.where(amask.flatten() > 0.5)[0]
     if len(ind) >0 :
-          indk=np.argmax(Eta.flatten()[ind])
-          # defines k magnitude at spectral peak for further filtering ...   
-          knm=kn.flatten()[ind[indk]]
-          print('KNM:',knm,Eta.flatten()[ind[indk]],np.max(Eta),ncoh,ncoh2,'coh:',cohthr)
-      
-    rows, cols =np.where(kn > 2*knm  )
-    for r, c in zip(rows, cols):               
-          amask[r,c]=0
-    rows, cols =np.where(kn < 0.6*knm  )
-    for r, c in zip(rows, cols):               
-          amask[r,c]=0
+      if ((nm > n) or (mm > m)):
+        cfac=np.sqrt(nm*mm)
+        amaskc=amask
+        amask=Eta*0
+        # Recopies coarse mask on fine grid 
+        
+        masked_data = masked_array(Eta, mask=(amaskc > 0.5) )
+        # Get coordinates of masked cells
+        rows, cols = np.where(masked_data.mask)
+        dmc=mm//m
+        dnr=nm//n
+        for r, c in zip(rows, cols):
+          jm1=np.max([0,r*dnr-dnr//2]);
+          jm2=np.min([nkyr,r*dnr+dnr//2+1]);
+          im1=np.max([0,c*dmc-dmc//2]);
+          im2=np.min([nkxr,c*dmc+dmc//2+1]);
+          amask[jm1:jm2,im1:im2]=1
+        
+      indk=np.argmax(Eta.flatten()[ind])
+      # defines k magnitude at spectral peak for further filtering ...   
+      knm=np.sqrt(kx2**2+ky2**2)*1000
+
+      knmax=knm.flatten()[ind[indk]]
+      rows, cols =np.where(kn > 2*knmax  )
+      for r, c in zip(rows, cols):               
+        amask[r,c]=0
+      rows, cols =np.where(kn < 0.6*knmax  )
+      for r, c in zip(rows, cols):               
+        amask[r,c]=0
       
     # Forces mask : here are a few choices ... 
        
     if mask_choice==1:
         amask=np.multiply(np.where(abs(kx2) <= 0.0006,1,0),np.where(abs(ky2-0.0015) <= 0.0003,1,0))
-      #amask=np.multiply(np.where(abs(kx2-0.000) < 0.0012,1,0),np.where(abs(ky2-0.0015) < 0.0003,1,0))
     if mask_choice==2:
     #Forcing for Norfolk island swell on track 17
         amask=np.multiply(np.where(abs(kx2+0.001) <= 0.0003,1,0),np.where(abs(ky2-0.000) <= 0.0004,1,0))
 
-        
-    bmask=ndimage.binary_dilation((amask > 0.5).astype(int))
+    amask=ndimage.binary_dilation((amask > 0.5).astype(int))
+    bmask=amask
+
     return amask,bmask
 
 ###################################################################
+def  SWOT_save_spectra(pth_results,filenopath,modelfound,cycle,tracks,side,boxindices,\
+                       lonc,latc,timec,trackangle,kx2,ky2,Eta,Etb,coh,ang,amask,sig0mean,sig0std,HH,Hs_SWOT_all,Hs_SWOT,Hs_SWOT_mask,Lm_SWOT,dm_SWOT, \
+                       timeww3=0,lonww3=0,latww3=0,indww3=0,distww3=0,Eta_WW3_obp_H=0,Eta_WW3_obp_H2=0,Hs_WW3=0,Hs_WW3_all=0,Hs_WW3_cut=0,\
+                       Hs_WW3_mask=0,Hs=0,Tm0m1=0,Qkk=0,Lm_WW3=0,dm_WW3=0, verbose=0)  :
+   hemiNS=['A','N','S']
+   hemiWE=['A','E','W']
+   lonlat=f'{abs(latc):05.2f}'+hemiNS[int(np.sign(latc))]
+   if modelfound==1:
+       np.savez(pth_results+'SWOT_swell_spectra_'+cycle+'_'+tracks+'_'+side+'_'+lonlat,\
+                fileSWOT=filenopath,cycle=cycle,tracks=tracks,side=side,boxindices=boxindices,\
+                lonc=lonc,latc=latc,timec=timec,trackangle=trackangle,\
+                kx2=kx2,ky2=ky2,E_SWOT=Eta,sig0_spec=Etb,coh=coh,ang=ang,amask=amask,\
+                sig0mean=sig0mean,sig0std=sig0std,HH=HH, \
+                Hs_SWOT_filtered_all=Hs_SWOT_all,Hs_SWOT_filtered_mask=Hs_SWOT,Hs_SWOT_mask=Hs_SWOT_mask,\
+                Lm_SWOT_filtered_mask=Lm_SWOT,dm_SWOT_filtered_mask=dm_SWOT, \
+                modelfound=modelfound,timeww3=timeww3,lonww3=lonww3,latww3=latww3,indww3=indww3,distww3=distww3,\
+                E_WW3_obp_H=Eta_WW3_obp_H,E_WW3_obp_H2=Eta_WW3_obp_H2,\
+                Hs_WW3=Hs_WW3,Hs_WW3_all=Hs_WW3_all,Hs_WW3_cut=Hs_WW3_cut,\
+                Hs_WW3_filtered_mask=Hs_WW3_mask,HsWW3=Hs,Tm0m1WW3=Tm0m1,QkkWW3=Qkk,Lm_WW3=Lm_WW3,dm_WW3=dm_WW3) 
+   else: 
+        np.savez(pth_results+'SWOT_swell_spectra_'+cycle+'_'+tracks+'_'+side+'_'+lonlat, \
+                fileSWOT=filenopath,cycle=cycle,tracks=tracks,side=side,boxindices=boxindices,\
+                lonc=lonc,latc=latc,timec=timec,trackangle=trackangle,\
+                kx2=kx2,ky2=ky2,ssh_spec=Eta,sig0_spec=Etb,coh=coh,ang=ang,amask=amask,\
+                sig0mean=sig0mean,sig0std=sig0std,E_SWOT=Eta,HH=HH, \
+                Hs_SWOT_filtered_all=Hs_SWOT_all,Hs_SWOT_filtered_mask=Hs_SWOT,Hs_SWOT_mask=Hs_SWOT_mask,\
+                Lm_SWOT_filtered_mask=Lm_SWOT,dm_SWOT_filtered_mask=dm_SWOT, \
+                modelfound=modelfound)    
 
 ###################################################################
 def  SWOT_denoise_isotropic(Ekxky,kx2,ky2,ndir=0,verbose=0)  :
