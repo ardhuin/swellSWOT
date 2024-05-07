@@ -19,6 +19,7 @@ import datetime
 import xarray as xr
 from numpy.ma import masked_array
 from scipy import ndimage
+from  spectral_analysis_functions import *
 
 from netCDF4 import Dataset
 
@@ -185,36 +186,48 @@ def SWOTfind_model_spectrum(ds_ww3t,loncr,latcr,timec) :
 
 ###################################################################
 # modpec,inds=swell.SWOTfind_model_spectrum(ds_ww3t,loncr,latcr,timec)
-def SWOTdefine_swell_mask(Eta,coh,ang,dlat,mask_choice,kx2,ky2,kn,cohthr,cfac,medsig0,nm,n,mm,m) :
-    indc=np.where((coh > cohthr))[0]
+def SWOTdefine_swell_mask(mybox,mybos,flbox,dy,dx,nm,mm,Eta,coh,ang,dlat,mask_choice,kx2,ky2,kn,cohthr,cfac,n,m,nkxr,nkyr) :
+    cohm=coh
+    kx2m=kx2
+    ky2m=ky2
+    angm=ang
+    Etam=Eta
+    cohthr2=cohthr
+    medsig0=np.nanmedian(mybos)
+
+    if ((nm > n) or (mm > m)):
+        # Recomputes spectra just for masking purposes
+        (Etam,Etbm,angm,angstdm,cohm,crosrm,phasesm,ky2m,kx2m,dkym,dkxm,detrendam,detrendbm,nspecm)=FFT2D_two_arrays_nm_detrend_flag(mybox,10**(0.1*mybos),flbox,dy,dx,nm,mm,detrend='quadratic')
+
+    indc=np.where((cohm > cohthr))[0]
     ncoh=len(indc)
-    
-    kp=np.where(kx2 > 0,1.,0.)
-    kpy=np.where(ky2 > 0,1.,0.)
+    kp=np.where(kx2m > 0,1.,0.)
+    kpy=np.where(ky2m > 0,1.,0.)
     ncoh2=0
     #if ncoh < 6:
-    cohmax=np.max(coh.flatten())
-    cohthr=cohmax/2
-    indc2=np.where((coh > cohthr) )[0]
+    cohmax=np.max(cohm.flatten())
+    cohthr2=cohmax/2
+    indc2=np.where((cohm > cohthr2) )[0]
     ncoh2=len(indc2)
     cohOK=1
     maskset=0
     if ncoh2 > 3:
        ncoh=ncoh2
-    if cohthr > 0.8/cfac and ncoh > 3 and (medsig0 < 70):
-       cohs=(coh/cohthr)*np.sign(np.cos(ang))*np.sign(ky2*dlat)
+    if cohthr > 0.8/cfac and ncoh > 3 and (np.nanmedian(mybos) < 70):
+       cohs=(cohm/cohthr)*np.sign(np.cos(angm))*np.sign(ky2m*dlat)
        amask=ndimage.binary_dilation((cohs > 1 ).astype(int))
        maskset=1
     else:
        cohOK=0
-       amask=Eta/10*np.sign(ky2*dlat)
+       amask=Etam/10*np.sign(ky2m*dlat)
        maskset=2
     if (cohOK==1) or (mask_choice < 0):
-       amask=Eta/10*np.sign(ky2*dlat)
-       Emax=2/np.max(Eta.flatten())
-       amask=Eta*Emax*np.sign(-ky2)
+       amask=Etam/10*np.sign(ky2m*dlat)
+       Emax=2/np.max(Etam.flatten())
+       amask=Etam*Emax*np.sign(-ky2m)
        maskset=3
     print('TEST:',maskset,cohOK,mask_choice,cohthr,cohmax,ncoh,medsig0)
+    
     ind=np.where(amask.flatten() > 0.5)[0]
     if len(ind) >0 :
       if ((nm > n) or (mm > m)):
@@ -223,7 +236,7 @@ def SWOTdefine_swell_mask(Eta,coh,ang,dlat,mask_choice,kx2,ky2,kn,cohthr,cfac,me
         amask=Eta*0
         # Recopies coarse mask on fine grid 
         
-        masked_data = masked_array(Eta, mask=(amaskc > 0.5) )
+        masked_data = masked_array(Etam, mask=(amaskc > 0.5) )
         # Get coordinates of masked cells
         rows, cols = np.where(masked_data.mask)
         dmc=mm//m
@@ -235,9 +248,9 @@ def SWOTdefine_swell_mask(Eta,coh,ang,dlat,mask_choice,kx2,ky2,kn,cohthr,cfac,me
           im2=np.min([nkxr,c*dmc+dmc//2+1]);
           amask[jm1:jm2,im1:im2]=1
         
-      indk=np.argmax(Eta.flatten()[ind])
-      # defines k magnitude at spectral peak for further filtering ...   
-      knm=np.sqrt(kx2**2+ky2**2)*1000
+      indk=np.argmax(Etam.flatten()[ind])
+    # defines k magnitude at spectral peak for further filtering ...   
+      knm=np.sqrt(kx2m**2+ky2m**2)*1000
 
       knmax=knm.flatten()[ind[indk]]
       rows, cols =np.where(kn > 2*knmax  )
@@ -255,14 +268,15 @@ def SWOTdefine_swell_mask(Eta,coh,ang,dlat,mask_choice,kx2,ky2,kn,cohthr,cfac,me
     #Forcing for Norfolk island swell on track 17
         amask=np.multiply(np.where(abs(kx2+0.001) <= 0.0003,1,0),np.where(abs(ky2-0.000) <= 0.0004,1,0))
 
-    amask=ndimage.binary_dilation((amask > 0.5).astype(int))
-    bmask=amask
+    bmask=ndimage.binary_dilation((amask > 0.5).astype(int))
 
     return amask,bmask
 
+
+
 ###################################################################
 def  SWOT_save_spectra(pth_results,filenopath,modelfound,cycle,tracks,side,boxindices,\
-                       lonc,latc,timec,trackangle,kx2,ky2,Eta,Etb,coh,ang,amask,sig0mean,sig0std,HH,Hs_SWOT_all,Hs_SWOT,Hs_SWOT_mask,Lm_SWOT,dm_SWOT, \
+                       lonc,latc,timec,trackangle,kx2,ky2,Eta,Etb,coh,ang,amask,sig0mean,sig0std,HH,HH2,Hs_SWOT_all,Hs_SWOT,Hs_SWOT_mask,Lm_SWOT,dm_SWOT, \
                        timeww3=0,lonww3=0,latww3=0,indww3=0,distww3=0,Eta_WW3_obp_H=0,Eta_WW3_obp_H2=0,Hs_WW3=0,Hs_WW3_all=0,Hs_WW3_cut=0,\
                        Hs_WW3_mask=0,Hs=0,Tm0m1=0,Qkk=0,Lm_WW3=0,dm_WW3=0, verbose=0)  :
    hemiNS=['A','N','S']
@@ -273,7 +287,7 @@ def  SWOT_save_spectra(pth_results,filenopath,modelfound,cycle,tracks,side,boxin
                 fileSWOT=filenopath,cycle=cycle,tracks=tracks,side=side,boxindices=boxindices,\
                 lonc=lonc,latc=latc,timec=timec,trackangle=trackangle,\
                 kx2=kx2,ky2=ky2,E_SWOT=Eta,sig0_spec=Etb,coh=coh,ang=ang,amask=amask,\
-                sig0mean=sig0mean,sig0std=sig0std,HH=HH, \
+                sig0mean=sig0mean,sig0std=sig0std,HH=HH,HH2=HH2, \
                 Hs_SWOT_filtered_all=Hs_SWOT_all,Hs_SWOT_filtered_mask=Hs_SWOT,Hs_SWOT_mask=Hs_SWOT_mask,\
                 Lm_SWOT_filtered_mask=Lm_SWOT,dm_SWOT_filtered_mask=dm_SWOT, \
                 modelfound=modelfound,timeww3=timeww3,lonww3=lonww3,latww3=latww3,indww3=indww3,distww3=distww3,\
@@ -285,7 +299,7 @@ def  SWOT_save_spectra(pth_results,filenopath,modelfound,cycle,tracks,side,boxin
                 fileSWOT=filenopath,cycle=cycle,tracks=tracks,side=side,boxindices=boxindices,\
                 lonc=lonc,latc=latc,timec=timec,trackangle=trackangle,\
                 kx2=kx2,ky2=ky2,ssh_spec=Eta,sig0_spec=Etb,coh=coh,ang=ang,amask=amask,\
-                sig0mean=sig0mean,sig0std=sig0std,E_SWOT=Eta,HH=HH, \
+                sig0mean=sig0mean,sig0std=sig0std,E_SWOT=Eta,HH=HH,HH2=HH2, \
                 Hs_SWOT_filtered_all=Hs_SWOT_all,Hs_SWOT_filtered_mask=Hs_SWOT,Hs_SWOT_mask=Hs_SWOT_mask,\
                 Lm_SWOT_filtered_mask=Lm_SWOT,dm_SWOT_filtered_mask=dm_SWOT, \
                 modelfound=modelfound)    
