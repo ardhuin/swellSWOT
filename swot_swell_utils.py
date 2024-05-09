@@ -184,6 +184,86 @@ def SWOTfind_model_spectrum(ds_ww3t,loncr,latcr,timec) :
             print('Did not find model spectrum for location (lon,lat):',loncr,latcr,' at time ',timeww3)
         return modspec,inds,modelfound,timeww3,lonww3,latww3,dist
 
+
+###################################################################
+###################################################################
+def SWOTdefine_swell_mask_simple(Eta,coh,ang,medsig0,dlat,kx2,ky2,cohthr=0.3,cfac=8,mask_choice=0) :
+    cohm=coh
+    kx2m=kx2
+    ky2m=ky2
+    angm=ang
+    Etam=Eta
+    cohthr2=cohthr
+    
+    kn=np.sqrt(kx2**2+ky2**2)*1000
+    
+    indc=np.where((cohm > cohthr))[0]
+    ncoh=len(indc)
+    kp=np.where(kx2m > 0,1.,0.)
+    kpy=np.where(ky2m > 0,1.,0.)
+    ncoh2=0
+    #if ncoh < 6:
+    cohmax=np.max(cohm.flatten())
+    cohthr2=cohmax/2
+    indc2=np.where((cohm > cohthr2) )[0]
+    ncoh2=len(indc2)
+    cohOK=1
+    maskset=0
+    if ncoh2 > 3:
+       ncoh=ncoh2
+    if cohthr > 0.8/cfac and ncoh > 3 and (medsig0 < 70):
+       cohs=(cohm/cohthr)*np.sign(np.cos(angm))*np.sign(ky2m*dlat)
+       amask=ndimage.binary_dilation((cohs > 1 ).astype(int))
+       maskset=1
+    else:
+       cohOK=0
+       amask=Etam/10*np.sign(ky2m*dlat)
+       maskset=2
+    if (cohOK==1) or (mask_choice == -1):
+       Emax=2/np.max(Etam.flatten())
+       amask=Etam*Emax*np.sign(-ky2m)
+       maskset=3
+    if (mask_choice == -2):
+       Emax=10/np.max(Etam.flatten())
+       amask=Etam*Emax*np.sign(-ky2m*dlat)
+       maskset=4
+    if (mask_choice == -3):
+       Emax=2/np.max(Etam.flatten())
+       amask=Etam*Emax*np.sign(-ky2m*dlat)
+       amask=ndimage.binary_dilation((amask > 0.5).astype(int)) 
+       maskset=5
+    
+    ind=np.where(amask.flatten() > 0.5)[0]
+    if len(ind) >0 :
+        
+      indk=np.argmax(Etam.flatten()[ind])
+    # defines k magnitude at spectral peak for further filtering ...   
+      knm=np.sqrt(kx2m**2+ky2m**2)*1000
+
+      knmax=knm.flatten()[ind[indk]]
+      rows, cols =np.where(kn > 2*knmax  )
+      for r, c in zip(rows, cols):               
+        amask[r,c]=0
+      rows, cols =np.where(kn < 0.6*knmax  )
+      for r, c in zip(rows, cols):               
+        amask[r,c]=0
+      
+    # Forces mask : here are a few choices ... 
+       
+    if mask_choice==1:
+        amask=np.multiply(np.where(abs(kx2) <= 0.0006,1,0),np.where(abs(ky2-0.0015) <= 0.0005,1,0))
+        maskset=11
+    if mask_choice==2:
+    #Forcing for Norfolk island swell on track 17
+        amask=np.multiply(np.where(abs(kx2+0.001) <= 0.0003,1,0),np.where(abs(ky2-0.000) <= 0.0004,1,0))
+        maskset=12
+
+    bmask=ndimage.binary_dilation((amask > 0.5).astype(int))
+
+    print('Swell mask option:',maskset,cohOK,mask_choice,cohthr,cohmax,ncoh,medsig0)
+
+    return amask,bmask
+
 ###################################################################
 # modpec,inds=swell.SWOTfind_model_spectrum(ds_ww3t,loncr,latcr,timec)
 def SWOTdefine_swell_mask(mybox,mybos,flbox,dy,dx,nm,mm,Eta,coh,ang,dlat,mask_choice,kx2,ky2,kn,cohthr,cfac,n,m,nkxr,nkyr) :
@@ -221,12 +301,19 @@ def SWOTdefine_swell_mask(mybox,mybos,flbox,dy,dx,nm,mm,Eta,coh,ang,dlat,mask_ch
        cohOK=0
        amask=Etam/10*np.sign(ky2m*dlat)
        maskset=2
-    if (cohOK==1) or (mask_choice < 0):
-       amask=Etam/10*np.sign(ky2m*dlat)
+    if (cohOK==1) or (mask_choice == -1):
        Emax=2/np.max(Etam.flatten())
        amask=Etam*Emax*np.sign(-ky2m)
        maskset=3
-    print('TEST:',maskset,cohOK,mask_choice,cohthr,cohmax,ncoh,medsig0)
+    if (mask_choice == -2):
+       Emax=10/np.max(Etam.flatten())
+       amask=Etam*Emax*np.sign(-ky2m*dlat)
+       maskset=4
+    if (mask_choice == -3):
+       Emax=2/np.max(Etam.flatten())
+       amask=Etam*Emax*np.sign(-ky2m*dlat)
+       amask=ndimage.binary_dilation((amask > 0.5).astype(int)) 
+       maskset=5
     
     ind=np.where(amask.flatten() > 0.5)[0]
     if len(ind) >0 :
@@ -263,12 +350,16 @@ def SWOTdefine_swell_mask(mybox,mybos,flbox,dy,dx,nm,mm,Eta,coh,ang,dlat,mask_ch
     # Forces mask : here are a few choices ... 
        
     if mask_choice==1:
-        amask=np.multiply(np.where(abs(kx2) <= 0.0006,1,0),np.where(abs(ky2-0.0015) <= 0.0003,1,0))
+        amask=np.multiply(np.where(abs(kx2) <= 0.0006,1,0),np.where(abs(ky2-0.0015) <= 0.0005,1,0))
+        maskset=11
     if mask_choice==2:
     #Forcing for Norfolk island swell on track 17
         amask=np.multiply(np.where(abs(kx2+0.001) <= 0.0003,1,0),np.where(abs(ky2-0.000) <= 0.0004,1,0))
+        maskset=12
 
     bmask=ndimage.binary_dilation((amask > 0.5).astype(int))
+
+    print('Swell mask option:',maskset,cohOK,mask_choice,cohthr,cohmax,ncoh,medsig0)
 
     return amask,bmask
 
@@ -277,7 +368,7 @@ def SWOTdefine_swell_mask(mybox,mybos,flbox,dy,dx,nm,mm,Eta,coh,ang,dlat,mask_ch
 ###################################################################
 def  SWOT_save_spectra(pth_results,filenopath,modelfound,cycle,tracks,side,boxindices,\
                        lonc,latc,timec,trackangle,kx2,ky2,Eta,Etb,coh,ang,amask,sig0mean,sig0std,HH,HH2,Hs_SWOT_all,Hs_SWOT,Hs_SWOT_mask,Lm_SWOT,dm_SWOT, \
-                       timeww3=0,lonww3=0,latww3=0,indww3=0,distww3=0,Eta_WW3_obp_H=0,Eta_WW3_obp_H2=0,Hs_WW3=0,Hs_WW3_all=0,Hs_WW3_cut=0,\
+                       timeww3=0,lonww3=0,latww3=0,indww3=0,distww3=0,E_WW3_obp_H=0,E_WW3_obp_H2=0,E_WW3_noa_H2=0,Hs_WW3=0,Hs_WW3_all=0,Hs_WW3_cut=0,\
                        Hs_WW3_mask=0,Hs=0,Tm0m1=0,Qkk=0,Lm_WW3=0,dm_WW3=0, verbose=0)  :
    hemiNS=['A','N','S']
    hemiWE=['A','E','W']
@@ -291,7 +382,7 @@ def  SWOT_save_spectra(pth_results,filenopath,modelfound,cycle,tracks,side,boxin
                 Hs_SWOT_filtered_all=Hs_SWOT_all,Hs_SWOT_filtered_mask=Hs_SWOT,Hs_SWOT_mask=Hs_SWOT_mask,\
                 Lm_SWOT_filtered_mask=Lm_SWOT,dm_SWOT_filtered_mask=dm_SWOT, \
                 modelfound=modelfound,timeww3=timeww3,lonww3=lonww3,latww3=latww3,indww3=indww3,distww3=distww3,\
-                E_WW3_obp_H=Eta_WW3_obp_H,E_WW3_obp_H2=Eta_WW3_obp_H2,\
+                E_WW3_obp_H=E_WW3_obp_H,E_WW3_obp_H2=E_WW3_obp_H2,E_WW3_noa_H2=E_WW3_noa_H2,\
                 Hs_WW3=Hs_WW3,Hs_WW3_all=Hs_WW3_all,Hs_WW3_cut=Hs_WW3_cut,\
                 Hs_WW3_filtered_mask=Hs_WW3_mask,HsWW3=Hs,Tm0m1WW3=Tm0m1,QkkWW3=Qkk,Lm_WW3=Lm_WW3,dm_WW3=dm_WW3) 
    else: 

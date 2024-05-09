@@ -1,6 +1,11 @@
 import numpy as np
 import scipy.signal as sg
 import matplotlib.pyplot as plt
+import scipy.constants as consts
+
+def G_field_oneway(theta):
+    # question for Alejandro: why 2.25 ? ... when **4 this gives another exp factor ... 
+    return np.exp(-np.abs(theta/(np.radians(.107)/2))**2.25*np.log(2))
 
 
 def get_obp_filter(L_filt = 1, sampling_in = 0.025, f_axis = None, plot_flag = True, kernel="parzen"):
@@ -20,8 +25,32 @@ def get_obp_filter(L_filt = 1, sampling_in = 0.025, f_axis = None, plot_flag = T
     print("Nb of points OBP kernel: %d" % Nparzen)
     if kernel == "bharris":
         w_obp = sg.blackmanharris(Nparzen) # parzen of 41 points if input sampling is 25 m (kernel length is ~1 km)
-    else:        
+    if kernel == "parzen":
         w_obp = sg.parzen(Nparzen) # parzen of 41 points if input sampling is 25 m (kernel length is ~1 km)
+    if kernel == "sinc2":
+        xn=(np.arange(0,Nparzen-1,1)-Nparzen//2)*2*np.pi
+        w_obp = (np.sinc(xn*L_filt*0.00222))**2
+    if kernel == "alejandro_azptr":
+       PRF = 4332
+       N_burst = 9
+       v_sat = 7310.
+       H = 875.0e3
+       f_s = 300.0e6
+       v_ground = v_sat/(1+H/6377.0e3)
+       lambda_c = (consts.c/35.75e9)
+       incidence_deg = 3.5 # just used for the ground/range conversion for xtrack
+       d = N_burst*v_ground/PRF # along track posting before OBP averaging
+       w_ptr = np.zeros(512)
+       w_ptr[:401] = np.sinc(2*v_sat*N_burst/(lambda_c*H*PRF)*np.arange(-200,201)*d)**2
+       w_ptr /= np.sum(w_ptr)*d
+       w_obp = np.zeros(512)
+       y_tab = np.arange(-200,201)*d+1.0e-3
+       ant = G_field_oneway(y_tab/H)**4
+       w_obp[:len(y_tab)] = np.sin(2*np.pi*v_sat*N_burst/(lambda_c*H*PRF)*y_tab)**2/np.sin(2*np.pi*v_sat/(lambda_c*H*PRF)*y_tab)**2*ant
+       w_obp /= np.sum(w_obp)*d
+       sampling_in=d/1000.
+
+
     w_obp /= np.sum(w_obp)
     x_axis = np.arange(-(len(w_obp)-1)/2, (len(w_obp)-1)/2 + 1)*sampling_in
 
@@ -50,6 +79,8 @@ def get_obp_filter(L_filt = 1, sampling_in = 0.025, f_axis = None, plot_flag = T
     
     return x_axis, w_obp, f_obp, S_obp
 
+
+
 def compute_aliased_spectrum_2D(fx_in, fy_in, S_in, fsx, fsy, nrep=2):
     """
     Given the main replica of a spectrum (S_in), compute its aliased version
@@ -64,6 +95,8 @@ def compute_aliased_spectrum_2D(fx_in, fy_in, S_in, fsx, fsy, nrep=2):
     nrep,    number of alias to compute (alias replicas at +-fs, +-2*fs... +-nrep*fs)
     in1side, the spectrum provided 
     
+# Note by FA: could there be minor bug? when the number of fft points is odd, the  k=-kN and k=kN are the same wavenumber ... 
+#             it looks like the aliasing computed here causes the values at k=kN to be really high
     
     """
     fx_2side = fx_in

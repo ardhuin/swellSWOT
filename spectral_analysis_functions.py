@@ -671,3 +671,4 @@ def FFT2D_two_arrays_nm_detrend_flag(arraya,arrayb,arrayf,dx,dy,n,m,isplot=0,det
     return Eta,Etb,ang,angstd,coh,crosr,phases,kx2,ky2,dkxtile,dkytile,arrayad,arraybd,nspec
 
 
+
