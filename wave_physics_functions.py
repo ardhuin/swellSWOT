@@ -102,12 +102,14 @@ def  wavespec_Efth_to_first3(efth,fren,dfreq,dirn,dth)  :
     Qkk=np.sqrt(Q2)/Etot
     Qf=np.sqrt(np.sum(Ef**2*dfreq))/Etot
     Tm0m1=np.sum(Ef*dfreq/fren)/Etot
+    Em2=np.sum(Ef*dfreq*fren**2)+Ef[-1]*dfreq[-1]*0.5*fren[-1]**3  # integral including f^-5 tail 
+    Tm02=np.sqrt(Etot/Em2)
     Hs=4*np.sqrt(Etot) 
   #     print('WHAT:',ind,fren[ind],Ef[ind],a1[ind],b1[ind],m1[ind],efth[ind,:])
     th1m=np.arctan2(b1,a1)/d2r
   #  print('TEST:',nf,nt,m1,'##',np.sum(efth[5,:]*np.cos(dirn))*dth/Ef[5],a1[5],b1[5],m1[5])
     sth1m=np.sqrt(np.abs(2.0*(1-m1)))/d2r
-    return Ef,th1m,sth1m,Hs,Tm0m1,Qf,Qkk
+    return Ef,th1m,sth1m,Hs,Tm0m1,Tm02,Qf,Qkk
 
 #############################################################################
 def  wavespec_Efth_to_first5(efth,fren,dfreq,dirn,dth)  :

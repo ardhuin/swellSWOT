@@ -168,6 +168,9 @@ def SWOTfind_model_spectrum(ds_ww3t,loncr,latcr,timec) :
             latww3=ds_ww3t.latitude[inds].values
             #print('COUCOU lon:',loncr,latcr,timec,timeww3a,'##',len(indt),dist,ds_ww3t.longitude[inds].values,ds_ww3t.latitude[inds].values)
             modspec=ds_ww3t.efth[inds].squeeze()
+            U10=ds_ww3t.wnd[inds].values
+            Udir=ds_ww3t.wnddir[inds].values
+
             #fig,axs=plt.subplots(1,1,figsize=(7,7))
             #axs.scatter(lonc,latc,c='g',linewidth=8,label='model');
             #axs.scatter(loncr,latcr,c='b',linewidth=4,label='model');
@@ -180,9 +183,11 @@ def SWOTfind_model_spectrum(ds_ww3t,loncr,latcr,timec) :
             modelfound=1
         else: 
             modspec=[]
+            U10=[]
+            Udir=[]
             inds=0
             print('Did not find model spectrum for location (lon,lat):',loncr,latcr,' at time ',timeww3)
-        return modspec,inds,modelfound,timeww3,lonww3,latww3,dist
+        return modspec,inds,modelfound,timeww3,lonww3,latww3,dist,U10,Udir
 
 
 ###################################################################
@@ -232,6 +237,12 @@ def SWOTdefine_swell_mask_simple(Eta,coh,ang,medsig0,dlat,kx2,ky2,cohthr=0.3,cfa
        amask=Etam*Emax*np.sign(-ky2m*dlat)
        amask=ndimage.binary_dilation((amask > 0.5).astype(int)) 
        maskset=5
+    if (mask_choice == -4):
+       Etam=np.where(abs(kx2) <= 0.0012,Etam,0)
+       Emax=2/np.max(Etam.flatten())
+       amask=Etam*Emax*np.sign(-ky2m*dlat)
+       amask=ndimage.binary_dilation((amask > 0.5).astype(int)) 
+       maskset=6
     
     ind=np.where(amask.flatten() > 0.5)[0]
     if len(ind) >0 :
@@ -314,7 +325,13 @@ def SWOTdefine_swell_mask(mybox,mybos,flbox,dy,dx,nm,mm,Eta,coh,ang,dlat,mask_ch
        amask=Etam*Emax*np.sign(-ky2m*dlat)
        amask=ndimage.binary_dilation((amask > 0.5).astype(int)) 
        maskset=5
-    
+    if (mask_choice == -4):
+       Etam=np.where(abs(kx2) <= 0.0012,Etam,0)
+       Emax=2/np.max(Etam.flatten())
+       amask=Etam*Emax*np.sign(-ky2m*dlat)
+       amask=ndimage.binary_dilation((amask > 0.5).astype(int)) 
+       maskset=6
+
     ind=np.where(amask.flatten() > 0.5)[0]
     if len(ind) >0 :
       if ((nm > n) or (mm > m)):
@@ -369,7 +386,7 @@ def SWOTdefine_swell_mask(mybox,mybos,flbox,dy,dx,nm,mm,Eta,coh,ang,dlat,mask_ch
 def  SWOT_save_spectra(pth_results,filenopath,modelfound,cycle,tracks,side,boxindices,\
                        lonc,latc,timec,trackangle,kx2,ky2,Eta,Etb,coh,ang,amask,sig0mean,sig0std,HH,HH2,Hs_SWOT_all,Hs_SWOT,Hs_SWOT_mask,Lm_SWOT,dm_SWOT, \
                        timeww3=0,lonww3=0,latww3=0,indww3=0,distww3=0,E_WW3_obp_H=0,E_WW3_obp_H2=0,E_WW3_noa_H2=0,Hs_WW3=0,Hs_WW3_all=0,Hs_WW3_cut=0,\
-                       Hs_WW3_mask=0,Hs=0,Tm0m1=0,Qkk=0,Lm_WW3=0,dm_WW3=0, verbose=0)  :
+                       Hs_WW3_mask=0,Hs=0,Tm0m1=0,Tm02=0,Qkk=0,U10=0,Udir=0,Lm_WW3=0,dm_WW3=0, verbose=0)  :
    hemiNS=['A','N','S']
    hemiWE=['A','E','W']
    lonlat=f'{abs(latc):05.2f}'+hemiNS[int(np.sign(latc))]
@@ -384,7 +401,7 @@ def  SWOT_save_spectra(pth_results,filenopath,modelfound,cycle,tracks,side,boxin
                 modelfound=modelfound,timeww3=timeww3,lonww3=lonww3,latww3=latww3,indww3=indww3,distww3=distww3,\
                 E_WW3_obp_H=E_WW3_obp_H,E_WW3_obp_H2=E_WW3_obp_H2,E_WW3_noa_H2=E_WW3_noa_H2,\
                 Hs_WW3=Hs_WW3,Hs_WW3_all=Hs_WW3_all,Hs_WW3_cut=Hs_WW3_cut,\
-                Hs_WW3_filtered_mask=Hs_WW3_mask,HsWW3=Hs,Tm0m1WW3=Tm0m1,QkkWW3=Qkk,Lm_WW3=Lm_WW3,dm_WW3=dm_WW3) 
+                Hs_WW3_filtered_mask=Hs_WW3_mask,HsWW3=Hs,Tm0m1WW3=Tm0m1,Tm02WW3=Tm02,U10WW3=U10,UdirWW3=Udir,QkkWW3=Qkk,Lm_WW3=Lm_WW3,dm_WW3=dm_WW3) 
    else: 
         np.savez(pth_results+'SWOT_swell_spectra_'+cycle+'_'+tracks+'_'+side+'_'+lonlat, \
                 fileSWOT=filenopath,cycle=cycle,tracks=tracks,side=side,boxindices=boxindices,\

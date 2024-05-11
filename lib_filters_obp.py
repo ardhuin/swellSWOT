@@ -95,9 +95,7 @@ def compute_aliased_spectrum_2D(fx_in, fy_in, S_in, fsx, fsy, nrep=2):
     nrep,    number of alias to compute (alias replicas at +-fs, +-2*fs... +-nrep*fs)
     in1side, the spectrum provided 
     
-# Note by FA: could there be minor bug? when the number of fft points is odd, the  k=-kN and k=kN are the same wavenumber ... 
-#             it looks like the aliasing computed here causes the values at k=kN to be really high
-    
+   
     """
     fx_2side = fx_in
     fy_2side = fy_in
