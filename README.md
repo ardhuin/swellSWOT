@@ -1,5 +1,6 @@
 # swellSWOT
-Analysis tools for looking at long swells in SWOT "unsmoothed" data. 
+Analysis tools for looking at long swells in SWOT "unsmoothed" data. Some example illustrations can be found in these videos: 
+https://www.youtube.com/playlist?list=PLm1sPhvTQhOxMjglmUjAyB28bSM45C2eQ 
 
 Main contributors: 
 Fabrice Ardhuin 
