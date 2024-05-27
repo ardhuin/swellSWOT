@@ -63,7 +63,7 @@ def  wavespec_Efth_to_Ekxky(eft1s,fren,dfreq,dirn,dth,dkx=0.0001,dky=0.0001,nkx=
     return Ekxky,kx,ky,kx2,ky2
 
 #############################################################################
-def  wavespec_Efth_to_first3(efth,fren,dfreq,dirn,dth)  :
+def  wavespec_Efth_to_first3(efth,fren,dfreq,dirn,dth,cut=1E4)  :
     '''
     Computes first 3 moments from E(f,theta) spectrum
     inputs :
@@ -75,12 +75,14 @@ def  wavespec_Efth_to_first3(efth,fren,dfreq,dirn,dth)  :
     d2r=np.pi/180
     grav=9.81
     wn=(2*np.pi*fren)**2/grav
+    wavelength=2*np.pi/wn
     Cg=grav/(4*np.pi*fren) 
     dk=2*np.pi*dfreq/Cg
     [nf,nt]=np.shape(efth)
     dir2=np.tile((dirn*d2r).reshape(1,nt),(nf,1))
     Ef=np.sum(efth,             axis=1)*dth
-    Etot=np.sum(Ef*dfreq)
+    inds=np.where(wavelength < cut)[0]
+    Etot=np.sum(Ef[inds]*dfreq[inds])
     eftn=0.5*(efth+np.roll(efth,nt//2,axis=1))
 
     #a1E=np.sum(efth*np.cos(dir2),axis=1)*dth
@@ -101,8 +103,9 @@ def  wavespec_Efth_to_first3(efth,fren,dfreq,dirn,dth)  :
     #   print('ft:',ind,fren[ind],wn[ind],'Cg:',Cg[ind],dfreq[ind]/(wn[ind]*dk[ind]),grav**2/(2*((np.pi*2)**4*fren[ind]**3 )) )
     Qkk=np.sqrt(Q2)/Etot
     Qf=np.sqrt(np.sum(Ef**2*dfreq))/Etot
-    Tm0m1=np.sum(Ef*dfreq/fren)/Etot
-    Em2=np.sum(Ef*dfreq*fren**2)+Ef[-1]*dfreq[-1]*0.5*fren[-1]**3  # integral including f^-5 tail 
+
+    Tm0m1=np.sum(Ef[inds]*dfreq[inds]/fren[inds])/Etot
+    Em2=np.sum(Ef[inds]*dfreq[inds]*fren[inds]**2)+Ef[-1]*dfreq[-1]*0.5*fren[-1]**3  # integral including f^-5 tail 
     Tm02=np.sqrt(Etot/Em2)
     Hs=4*np.sqrt(Etot) 
   #     print('WHAT:',ind,fren[ind],Ef[ind],a1[ind],b1[ind],m1[ind],efth[ind,:])

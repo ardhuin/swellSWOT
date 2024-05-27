@@ -224,7 +224,7 @@ def SWOTdefine_swell_mask_simple(Eta,coh,ang,medsig0,dlat,kx2,ky2,cohthr=0.3,cfa
        cohOK=0
        amask=Etam/10*np.sign(ky2m*dlat)
        maskset=2
-    if mask_choice == -1:
+    if (cohOK==1) or (mask_choice == -1):
        Emax=2/np.max(Etam.flatten())
        amask=Etam*Emax*np.sign(-ky2m)
        maskset=3
@@ -305,16 +305,17 @@ def SWOTdefine_swell_mask(mybox,mybos,flbox,dy,dx,nm,mm,Eta,coh,ang,dlat,mask_ch
     if ncoh2 > 3:
        ncoh=ncoh2
     if cohthr > 0.8/cfac and ncoh > 3 and (np.nanmedian(mybos) < 70):
-       cohs=(cohm/cohthr2)*np.sign(np.cos(angm))*np.sign(ky2m*dlat)
+       cohs=(cohm/cohthr)*np.sign(np.cos(angm))*np.sign(ky2m*dlat)
        amask=ndimage.binary_dilation((cohs > 1 ).astype(int))
        maskset=1
     else:
        cohOK=0
        amask=Etam/10*np.sign(ky2m*dlat)
        maskset=2
-    if mask_choice == -1:
+    if (cohOK==1) or (mask_choice == -1):
        Emax=2/np.max(Etam.flatten())
        amask=Etam*Emax*np.sign(-ky2m)
+       amask=ndimage.binary_dilation((amask > 0.5).astype(int)) 
        maskset=3
     if (mask_choice == -2):
        Emax=10/np.max(Etam.flatten())

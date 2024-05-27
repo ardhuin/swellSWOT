@@ -4,8 +4,9 @@ import matplotlib.pyplot as plt
 import scipy.constants as consts
 
 def G_field_oneway(theta):
-    # question for Alejandro: why 2.25 ? ... when **4 this gives another exp factor ... 
-    return np.exp(-np.abs(theta/(np.radians(.107)/2))**2.25*np.log(2))
+    # This antenna pattern function was fitted on measured antenna patterns by Alejandro Bohe (hence the "strange" 2.25 power)
+    # this is for the field (hence the sqrt, because the fit was on the "power") . This was corrected on 2024/05/26 
+    return np.sqrt(np.exp(-np.abs(theta/(np.radians(.107)/2))**2.25*np.log(2)))
 
 
 def get_obp_filter(L_filt = 1, sampling_in = 0.025, f_axis = None, plot_flag = True, kernel="parzen"):
@@ -30,7 +31,7 @@ def get_obp_filter(L_filt = 1, sampling_in = 0.025, f_axis = None, plot_flag = T
     if kernel == "sinc2":
         xn=(np.arange(0,Nparzen-1,1)-Nparzen//2)*2*np.pi
         w_obp = (np.sinc(xn*L_filt*0.00222))**2
-    if kernel == "alejandro_azptr":
+    if kernel == "alejandro_azptr_beam0":
        PRF = 4332
        N_burst = 9
        v_sat = 7310.
@@ -47,6 +48,40 @@ def get_obp_filter(L_filt = 1, sampling_in = 0.025, f_axis = None, plot_flag = T
        y_tab = np.arange(-200,201)*d+1.0e-3
        ant = G_field_oneway(y_tab/H)**4
        w_obp[:len(y_tab)] = np.sin(2*np.pi*v_sat*N_burst/(lambda_c*H*PRF)*y_tab)**2/np.sin(2*np.pi*v_sat/(lambda_c*H*PRF)*y_tab)**2*ant
+       w_obp /= np.sum(w_obp)*d
+       sampling_in=d/1000.
+    if kernel == "alejandro_azptr":
+       PRF = 4332
+       N_burst = 9
+       v_sat = 7310.
+       H = 875.0e3
+       f_s = 300.0e6
+       v_ground = v_sat/(1+H/6377.0e3)
+       lambda_c = (consts.c/35.75e9)
+       incidence_deg = 3.5 # just used for the ground/range conversion for xtrack
+       d = N_burst*v_ground/PRF # along track posting before OBP averaging
+       w_ptr = np.zeros(512)
+       w_ptr[:401] = np.sinc(2*v_sat*N_burst/(lambda_c*H*PRF)*np.arange(-200,201)*d)**2
+       w_ptr /= np.sum(w_ptr)*d
+       w_obp = np.zeros(512)
+       y_tab = np.arange(-200,201)*d+1.0e-3
+       ant = G_field_oneway(y_tab/H)**4
+#       w_obp[:len(y_tab)] = np.sin(2*np.pi*v_sat*N_burst/(lambda_c*H*PRF)*y_tab)**2/np.sin(2*np.pi*v_sat/(lambda_c*H*PRF)*y_tab)**2*ant
+       # Defines the PTR for each of the 9 beams
+       w_ale9 = np.zeros(512)
+       w_ptrantana_b = np.zeros((9,512))
+       w_ptrantana_c = np.zeros((9,512))
+       b_vals = np.arange(-4,5)
+       arg_b = 0.8/N_burst*b_vals[:,None]+2*v_sat/(lambda_c*H*PRF)*y_tab[None,:]
+       w_ptrantana_b[:,:len(y_tab)] = np.sin(np.pi*N_burst*arg_b)**2/np.sin(np.pi*arg_b)**2*(G_field_oneway(y_tab/H)**4)[None,:]
+       w_ptrantana_b = w_ptrantana_b/(np.sum(w_ptrantana_b, axis=1)[:,None]*d)
+       weights = np.array([0.07019711, 0.09767803, 0.12220272, 0.13814296, 0.14355835,0.13814296, 0.12220272, 0.09767803, 0.07019711])
+       for ib in range(9) :
+          w_ale9=w_ale9+weights[ib]*np.roll(w_ptrantana_b[ib,:],14*(ib-4))
+          w_ptrantana_c[ib,:] = np.roll(w_ptrantana_b[ib,:],14*(ib-4))
+       # these weights actually vary along the track. This is one set of weights obtained by averaging along one (?) cycle
+       w_obp[:len(y_tab)]=w_ale9[:len(y_tab)]
+        
        w_obp /= np.sum(w_obp)*d
        sampling_in=d/1000.
 
@@ -79,6 +114,80 @@ def get_obp_filter(L_filt = 1, sampling_in = 0.025, f_axis = None, plot_flag = T
     
     return x_axis, w_obp, f_obp, S_obp
 
+
+def get_obp_filter9(L_filt = 1, sampling_in = 0.025, f_axis = None, plot_flag = True, kernel="parzen"):
+    """
+    Get the kernel shape and the spectral response of the filter type specified in the arguments
+    
+    Arguments:
+    L_filt,      Kernel length in km
+    sampling_in, Spatial spacing (in km) of the filter kernel
+    f_axis,      Frequency axis where to compute the spectral response of the filter
+    plot_flag,   Plot filter kernel and spectral response
+    kernel,      Kernel to compute ('parzen' or 'bharris' -for Blackman-Harris)
+    """
+    Nparzen = int(np.round(L_filt/sampling_in))
+    if Nparzen%2 == 0:
+        Nparzen += 1    
+    print("Nb of points OBP kernel: %d" % Nparzen)
+    weights = np.array([0.07019711, 0.09767803, 0.12220272, 0.13814296, 0.14355835,0.13814296, 0.12220272, 0.09767803, 0.07019711])
+    PRF = 4332
+    N_burst = 9
+    v_sat = 7310.
+    H = 875.0e3
+    f_s = 300.0e6
+    v_ground = v_sat/(1+H/6377.0e3)
+    lambda_c = (consts.c/35.75e9)
+    incidence_deg = 3.5 # just used for the ground/range conversion for xtrack
+    d = N_burst*v_ground/PRF # along track posting before OBP averaging
+    w_ptr = np.zeros(512)
+    y_tab = np.arange(-200,201)*d+1.0e-3
+    ant = G_field_oneway(y_tab/H)**4
+    b_vals = np.arange(-4,5)
+    arg_b = 0.8/N_burst*b_vals[:,None]+2*v_sat/(lambda_c*H*PRF)*y_tab[None,:]
+    w_ptrantana_b = np.zeros((9,512))
+    w_ptrantana_c = np.zeros((9,512))
+    w_obp = np.zeros(512)
+    # Defines the PTR for each of the 9 beams
+    w_ptrantana_b[:,:len(y_tab)] = np.sin(np.pi*N_burst*arg_b)**2/np.sin(np.pi*arg_b)**2*(G_field_oneway(y_tab/H)**4)[None,:]
+    w_ptrantana_b = w_ptrantana_b/(np.sum(w_ptrantana_b, axis=1)[:,None]*d)
+    for ib in range(9) :
+       w_obp[:len(y_tab)]=w_ptrantana_b[ib,:len(y_tab)]
+        
+       sampling_in=d/1000.
+       w_obp /= np.sum(w_obp)
+       x_axis = np.arange(-(len(w_obp)-1)/2, (len(w_obp)-1)/2 + 1)*sampling_in
+
+    # OBP spectrum
+    
+       if type(f_axis) != np.ndarray:
+        if f_axis == None:
+            f_obp, S_obp = sg.freqz(w_obp, fs=1/sampling_in)
+        else:
+            f_obp, S_obp = sg.freqz(w_obp, fs=1/sampling_in, worN=f_axis)
+       else:
+        f_obp, S_obp = sg.freqz(w_obp, fs=1/sampling_in, worN=f_axis)
+       if ib== 0:
+         S_obpsum=weights[ib]*S_obp
+       else :
+         S_obpsum=S_obpsum+weights[ib]*S_obp  
+
+
+    S_obp = np.abs(S_obpsum)**2
+
+    if plot_flag:
+        fig, ax = plt.subplots(1, 2, figsize=(11, 4))
+        ax[0].plot(x_axis, w_obp/np.max(w_obp), ".-")
+        ax[1].plot(f_obp, 10*np.log10(S_obp))
+        ax[0].grid()
+        ax[0].set_xlabel("[km]")
+        ax[0].set_title("%s window (not normalized)" % kernel)
+        ax[1].grid()
+        ax[1].set_xlabel("freq [1/km]")
+        ax[1].set_ylabel("dB [m**2.km]")
+        plt.show()
+    
+    return x_axis, w_obp, f_obp, S_obp
 
 
 def compute_aliased_spectrum_2D(fx_in, fy_in, S_in, fsx, fsy, nrep=2):
