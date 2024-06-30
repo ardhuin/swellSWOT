@@ -114,6 +114,38 @@ def  wavespec_Efth_to_first3(efth,fren,dfreq,dirn,dth,cut=1E4)  :
     sth1m=np.sqrt(np.abs(2.0*(1-m1)))/d2r
     return Ef,th1m,sth1m,Hs,Tm0m1,Tm02,Qf,Qkk
 
+
+#############################################################################
+def  wavespec_Efth_to_Uss(efth,fren,dfreq,dirn,dth)  :
+    '''
+    Computes first 3 moments from E(f,theta) spectrum
+    inputs :
+            - etfs1 : spectrum
+    output : 
+            - Ef, th1m ... 
+
+    '''
+    d2r=np.pi/180
+    grav=9.81
+    sig=(2*np.pi*fren)
+    wn=(sig)**2/grav   # warning this is only valid for deep water 
+    wavelength=2*np.pi/wn
+    Cg=grav/(4*np.pi*fren) 
+    dk=2*np.pi*dfreq/Cg
+    [nf,nt]=np.shape(efth)
+    dir2=np.tile((dirn*d2r).reshape(1,nt),(nf,1))
+    a1=np.zeros(nf)
+    b1=np.zeros(nf)
+    Ef=np.sum(efth,             axis=1)*dth
+    Etot=np.sum(Ef*dfreq)
+    Hs=4*np.sqrt(Etot) 
+    for ind in range(nf):
+       a1[ind]=np.sum(efth[ind,:]*np.cos(dirn[:]*d2r))*dth
+       b1[ind]=np.sum(efth[ind,:]*np.sin(dirn[:]*d2r))*dth
+    Ussx=2*np.sum(a1*wn*sig*dfreq)  # warning this is only valid for deep water 
+    Ussy=2*np.sum(b1*wn*sig*dfreq)
+    return Hs,Ussx,Ussy
+
 #############################################################################
 def  wavespec_Efth_to_first5(efth,fren,dfreq,dirn,dth)  :
     '''
