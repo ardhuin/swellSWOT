@@ -277,7 +277,8 @@ def SWOTdefine_swell_mask_simple(Eta,coh,ang,medsig0,dlat,kx2,ky2,cohthr=0.3,cfa
 
 ###################################################################
 # modpec,inds=swell.SWOTfind_model_spectrum(ds_ww3t,loncr,latcr,timec)
-def SWOTdefine_swell_mask(mybox,mybos,flbox,dy,dx,nm,mm,Eta,coh,ang,dlat,mask_choice,kx2,ky2,kn,cohthr,cfac,n,m,nkxr,nkyr) :
+def SWOTdefine_swell_mask(mybox,mybos,flbox,dy,dx,nm,mm,Eta,coh,ang,dlat,mask_choice,kx2,ky2,kn,cohthr,cfac,n,m,nkxr,nkyr,\
+             kxmin=-0.003,kxmax=0.003,kymin=-0.003,kymax=0.003):
     cohm=coh
     kx2m=kx2
     ky2m=ky2
@@ -332,6 +333,17 @@ def SWOTdefine_swell_mask(mybox,mybos,flbox,dy,dx,nm,mm,Eta,coh,ang,dlat,mask_ch
        amask=Etam*Emax*np.sign(-ky2m*dlat)
        amask=ndimage.binary_dilation((amask > 0.5).astype(int)) 
        maskset=6
+    if (mask_choice == -5):
+       Etam=np.where(kx2 >= kxmin,Etam,0)
+       Etam=np.where(kx2 <= kxmax,Etam,0)
+       Etam=np.where(ky2 >= kymin,Etam,0)
+       Etam=np.where(ky2 <= kymax,Etam,0)
+       print('Emax:',np.max(Etam.flatten()),kxmin,kxmax,kymin,kymax)
+       Emax=4/np.max(Etam.flatten())
+       amask=Etam*Emax
+       amask=ndimage.binary_dilation((amask > 0.5).astype(int)) 
+       #amask=ndimage.binary_dilation((amask > 0.5).astype(int)) 
+       maskset=7
 
     ind=np.where(amask.flatten() > 0.5)[0]
     if len(ind) >0 :
@@ -386,7 +398,7 @@ def SWOTdefine_swell_mask(mybox,mybos,flbox,dy,dx,nm,mm,Eta,coh,ang,dlat,mask_ch
 ###################################################################
 def  SWOT_save_spectra(pth_results,filenopath,modelfound,cycle,tracks,side,boxindices,\
                        lonc,latc,timec,trackangle,kx2,ky2,Eta,Etb,coh,ang,amask,sig0mean,sig0std,HH,HH2,Hs_SWOT_all,Hs_SWOT,Hs_SWOT_mask,Lm_SWOT,dm_SWOT, \
-                       timeww3=0,lonww3=0,latww3=0,indww3=0,distww3=0,E_WW3_obp_H=0,E_WW3_obp_H2=0,E_WW3_noa_H2=0,Hs_WW3=0,Hs_WW3_all=0,Hs_WW3_cut=0,\
+                       timeww3=0,lonww3=0,latww3=0,indww3=0,distww3=0,E_WW3_obp_H=0,E_WW3_obp_H2=0,E_WW3_noa_H2=0,Hs_WW3_all=0,Hs_WW3_cut=0,\
                        Hs_WW3_mask=0,Hs=0,Tm0m1=0,Tm02=0,Qkk=0,U10=0,Udir=0,Lm_WW3=0,dm_WW3=0, verbose=0)  :
    hemiNS=['A','N','S']
    hemiWE=['A','E','W']
@@ -401,7 +413,7 @@ def  SWOT_save_spectra(pth_results,filenopath,modelfound,cycle,tracks,side,boxin
                 Lm_SWOT_filtered_mask=Lm_SWOT,dm_SWOT_filtered_mask=dm_SWOT, \
                 modelfound=modelfound,timeww3=timeww3,lonww3=lonww3,latww3=latww3,indww3=indww3,distww3=distww3,\
                 E_WW3_obp_H=E_WW3_obp_H,E_WW3_obp_H2=E_WW3_obp_H2,E_WW3_noa_H2=E_WW3_noa_H2,\
-                Hs_WW3=Hs_WW3,Hs_WW3_all=Hs_WW3_all,Hs_WW3_cut=Hs_WW3_cut,\
+                Hs_WW3_all=Hs_WW3_all,Hs_WW3_cut=Hs_WW3_cut,\
                 Hs_WW3_filtered_mask=Hs_WW3_mask,HsWW3=Hs,Tm0m1WW3=Tm0m1,Tm02WW3=Tm02,U10WW3=U10,UdirWW3=Udir,QkkWW3=Qkk,Lm_WW3=Lm_WW3,dm_WW3=dm_WW3) 
    else: 
         np.savez(pth_results+'SWOT_swell_spectra_'+cycle+'_'+tracks+'_'+side+'_'+lonlat, \
