@@ -15,7 +15,7 @@ compare model and SWOT data.
 
 For some of the other notebooks, you may need to download these data sets: 
 
-https://www.seanoe.org/data/00885/99739/  Spotter buoy data for storm "Fabrice"
+https://www.seanoe.org/data/00885/99739/  Spotter buoy data for storm "Rosemary"
 
 https://www.seanoe.org/data/00886/99783/  (this is our model hindcast only for June 2023, the full year 2023 and
 more is available on datarmor) 
