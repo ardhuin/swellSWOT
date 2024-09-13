@@ -186,7 +186,8 @@ def SWOTfind_model_spectrum(ds_ww3t,loncr,latcr,timec) :
             U10=[]
             Udir=[]
             inds=0
-            print('Did not find model spectrum for location (lon,lat):',loncr,latcr,' at time ',timeww3)
+            print('Did not find model spectrum for location (lon,lat):',loncr,latcr,' at time ',timeww3, \
+                  '. Min dist was:',dist,'for this model point:', lonww3,latww3)
         return modspec,inds,modelfound,timeww3,lonww3,latww3,dist,U10,Udir
 
 
@@ -397,7 +398,7 @@ def SWOTdefine_swell_mask(mybox,mybos,flbox,dy,dx,nm,mm,Eta,coh,ang,dlat,mask_ch
 
 ###################################################################
 def  SWOT_save_spectra(pth_results,filenopath,modelfound,cycle,tracks,side,boxindices,\
-                       lonc,latc,timec,trackangle,kx2,ky2,Eta,Etb,coh,ang,amask,sig0mean,sig0std,HH,HH2,Hs_SWOT_all,Hs_SWOT,Hs_SWOT_mask,Lm_SWOT,dm_SWOT, \
+                       lonc,latc,timec,trackangle,kx2,ky2,Eta,Etb,coh,ang,crosr,amask,sig0mean,sig0std,HH,HH2,Hs_SWOT_all,Hs_SWOT,Hs_SWOT_mask,Lm_SWOT,dm_SWOT, \
                        timeww3=0,lonww3=0,latww3=0,indww3=0,distww3=0,E_WW3_obp_H=0,E_WW3_obp_H2=0,E_WW3_noa_H2=0,Hs_WW3_all=0,Hs_WW3_cut=0,\
                        Hs_WW3_mask=0,Hs=0,Tm0m1=0,Tm02=0,Qkk=0,U10=0,Udir=0,Lm_WW3=0,dm_WW3=0, verbose=0)  :
    hemiNS=['A','N','S']
@@ -407,7 +408,7 @@ def  SWOT_save_spectra(pth_results,filenopath,modelfound,cycle,tracks,side,boxin
        np.savez(pth_results+'SWOT_swell_spectra_'+cycle+'_'+tracks+'_'+side+'_'+lonlat,\
                 fileSWOT=filenopath,cycle=cycle,tracks=tracks,side=side,boxindices=boxindices,\
                 lonc=lonc,latc=latc,timec=timec,trackangle=trackangle,\
-                kx2=kx2,ky2=ky2,E_SWOT=Eta,sig0_spec=Etb,coh=coh,ang=ang,amask=amask,\
+                kx2=kx2,ky2=ky2,E_SWOT=Eta,sig0_spec=Etb,coh=coh,ang=ang,crosr=crosr,amask=amask,\
                 sig0mean=sig0mean,sig0std=sig0std,HH=HH,HH2=HH2, \
                 Hs_SWOT_filtered_all=Hs_SWOT_all,Hs_SWOT_filtered_mask=Hs_SWOT,Hs_SWOT_mask=Hs_SWOT_mask,\
                 Lm_SWOT_filtered_mask=Lm_SWOT,dm_SWOT_filtered_mask=dm_SWOT, \
@@ -424,6 +425,49 @@ def  SWOT_save_spectra(pth_results,filenopath,modelfound,cycle,tracks,side,boxin
                 Hs_SWOT_filtered_all=Hs_SWOT_all,Hs_SWOT_filtered_mask=Hs_SWOT,Hs_SWOT_mask=Hs_SWOT_mask,\
                 Lm_SWOT_filtered_mask=Lm_SWOT,dm_SWOT_filtered_mask=dm_SWOT, \
                 modelfound=modelfound)    
+
+###################################################################
+def  SWOT_create_L3_spectra(saving_name,filenopath,modelOK,nkxr,nkyr):
+     SL3_nc_fid = Dataset(saving_name, 'w',format='NETCDF3_CLASSIC')
+     SL3_nc_fid.createDimension('time', None)
+     SL3_nc_fid.createDimension('nboy_40',1)
+     SL3_nc_fid.createDimension('nbox_40',2)
+     SL3_nc_fid.createDimension('nboy_20',4)
+     SL3_nc_fid.createDimension('nbox_20',6)
+     SL3_nc_fid.createDimension('nboy_10',8)
+     SL3_nc_fid.createDimension('nbox_10',14)
+     SL3_nc_fid.createDimension('nkyr',nkyr)
+     SL3_nc_fid.createDimension('nkxr',nkxr)
+
+     SL3_nc_var = SL3_nc_fid.createVariable('kx2', np.float32, ('nkyr', 'nkxr'))
+     SL3_nc_var.setncatts({'long_name': u"spatial_frequency", \
+                    'units': u"cycles per meter", \
+                    'comment': u"kx is cross-track to right"})
+
+     SL3_nc_ky2 = SL3_nc_fid.createVariable('ky2', np.float32, ('nkyr', 'nkxr'))
+     SL3_nc_ky2.setncatts({'long_name': u"spatial_frequency", \
+                    'units': u"cycles per meter", \
+                    'comment': u"ky is along-track"})
+
+     time = SL3_nc_fid.createVariable('time', np.float64, ('time',))
+
+     SL3_nc_track = SL3_nc_fid.createVariable('trackangle', np.float32, ('time'))
+     SL3_nc_track.setncatts({'long_name': u"track_angle", \
+                    'units': u"degrees", \
+                    'comment': u"clockwise_blabla"})
+      
+     SL3_nc_varE4 = SL3_nc_fid.createVariable('E_SWOT_40km', np.float32, ('time','nboy_40','nbox_40','nkyr', 'nkxr'))
+     SL3_nc_varE4.setncatts({'long_name': u"spatial_frequency", \
+                    'units': u"m**4"})                   
+     SL3_nc_varE2 = SL3_nc_fid.createVariable('E_SWOT_20km', np.float32, ('time','nboy_20','nbox_20','nkyr', 'nkxr'))
+     SL3_nc_varE2.setncatts({'long_name': u"spatial_frequency", \
+                    'units': u"m**4"})                   
+     SL3_nc_varE1 = SL3_nc_fid.createVariable('E_SWOT_10km', np.float32, ('time','nboy_10','nbox_10','nkyr', 'nkxr'))
+     SL3_nc_varE1.setncatts({'long_name': u"spatial_frequency", \
+                    'units': u"m**4"})                   
+ 
+#   if modelfound==1:
+     return SL3_nc_fid
 
 ###################################################################
 def  SWOT_denoise_isotropic(Ekxky,kx2,ky2,ndir=0,verbose=0)  :
