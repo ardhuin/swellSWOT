@@ -1,5 +1,7 @@
 import numpy as np
 import scipy.signal as sg
+#import scipy.signal as sgw          # this is for older versions of scipy
+import scipy.signal.windows as sgw
 import matplotlib.pyplot as plt
 import scipy.constants as consts
 
@@ -23,11 +25,11 @@ def get_obp_filter(L_filt = 1, sampling_in = 0.025, f_axis = None, plot_flag = T
     Nparzen = int(np.round(L_filt/sampling_in))
     if Nparzen%2 == 0:
         Nparzen += 1    
-    print("Nb of points OBP kernel: %d" % Nparzen)
+    #print("Nb of points OBP kernel: %d" % Nparzen)
     if kernel == "bharris":
-        w_obp = sg.blackmanharris(Nparzen) # parzen of 41 points if input sampling is 25 m (kernel length is ~1 km)
+        w_obp = sgw.blackmanharris(Nparzen) # parzen of 41 points if input sampling is 25 m (kernel length is ~1 km)
     if kernel == "parzen":
-        w_obp = sg.parzen(Nparzen) # parzen of 41 points if input sampling is 25 m (kernel length is ~1 km)
+        w_obp = sgw.parzen(Nparzen) # parzen of 41 points if input sampling is 25 m (kernel length is ~1 km)
     if kernel == "sinc2":
         xn=(np.arange(0,Nparzen-1,1)-Nparzen//2)*2*np.pi
         w_obp = (np.sinc(xn*L_filt*0.00222))**2

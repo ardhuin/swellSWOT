@@ -12,17 +12,110 @@ Date: latest version: 04.13.2024
 
 Dependencies:
     numpy, xarray, datetime, scipy
+    wave_physics_functions
 """
 
 import numpy as np
 import datetime
 import xarray as xr
+
+
+from wave_physics_functions import wavespec_Efth_to_Ekxky
+
+import matplotlib.colors as mcolors
+
+
 from numpy.ma import masked_array
 from scipy import ndimage
 from  spectral_analysis_functions import *
+from  lib_filters_obp import *
 
 from netCDF4 import Dataset
 
+###################################################################
+def spec_settings_for_L3(nres,version):
+    dx=250
+    dy=235
+    indxc=259
+    ISHIFT=30   # start of 40 km box for spectral analysis, in pixels, relative to track center
+    nkxr=20
+    nkyr=21
+    res_table=np.array([40,20,10])
+    restab=res_table[0:nres]
+    nX2tab=np.array([80,40,20])
+    nY2tab=np.array([84,42,21])
+    if (version == 'alpha'):
+       samemask=1
+       mtab=np.array([8,4,2])
+       ntab=np.array([8,4,2])
+    if (version == 'beta'):
+       samemask=0
+       mtab=np.array([8,2,2])
+       ntab=np.array([8,2,2])
+    
+    
+    indl=421 # alongtrack length of "chunk" of SWOT data being processed: this relatively big number is there because of the movies to get context.
+    dind=84  # increment in alongtrack number of pixels   restab[0]*2 #int(abs(ddlat)*400)  # rough converstion 1 deg is 100 km and resolution is about 0.25 km
+    hemiNS=['A','N','S']
+    hemiWE=['A','E','W']
+    return dx,dy,indxc,ISHIFT,nkxr,nkyr,restab,nX2tab,nY2tab,mtab,ntab,indl,dind,samemask,hemiNS,hemiWE
+
+
+###################################################################
+def wavespec_Efth_to_kxky_SWOT(efth,modf,moddf, modang,moddth,f_xt,f_at,H,Hazc,H3,kxmax,kymax,dkx,dky,dkxr,dkyr,nkxr,nkyr,doublesided=0,verbose=0,trackangle=0)  :
+
+    dkxf=dkx/3;dkyf=dky/3;   # finer spectral resolution 
+    nkx=600;nky=600;	     # not sure this is always high enough ... 
+
+    Ekxky,kxm,kym,kx2m,ky2m=wavespec_Efth_to_Ekxky(efth,modf,moddf,modang,moddth, \
+          dkx=dkxf,dky=dkyf,nkx=nkx,nky=nky,doublesided=doublesided,verbose=verbose,trackangle=trackangle)
+          
+    nxavg=round(dkxr/dkxf)   # number of spectral pixels to average
+    nyavg=round(dkyr/dkyf)
+
+    ik1=(nkxr+1)//2;ik2=ik1+nkxr
+    jk1=(nkyr+1)//2;jk2=jk1+nkyr
+
+    ishift=(1-np.mod(nkxr,2))
+    jshift=(1-np.mod(nkyr,2))
+    ix1=int(nkx-kxmax/dkxf)+nxavg*(ishift-1)
+    iy1=int(nky-kymax/dkyf)+nyavg*(jshift-1)
+    di1=-(nxavg//2); di2=di1+nxavg
+    dj1=-(nyavg//2); dj2=dj1+nyavg
+
+
+# Coarsening of WW3 spectrum on kx,ky grid 
+    Ekxkyr=np.zeros((nkxr*2,nkyr*2))
+    Ekxkyp=np.zeros((nkxr*2,nkyr*2))
+# We have to deal with the non-symmetry of the spectrum : hence the np.roll 
+    Ekxkyds=0.5*(Ekxky+np.fliplr(np.roll( np.flipud(np.roll(Ekxky,-1,axis=0)),-1,axis=1) ))
+    Ekxkydp=np.fliplr(np.roll( np.flipud(np.roll(Ekxky,-1,axis=0)),-1,axis=1) )
+# Coarsening of WW3 spectrum on kx,ky grid 
+# We have to deal with the non-symmetry of the spectrum for even numbers (nkxr or nkyr) 
+    for ix in range(nkxr*2): 
+       for iy in range(nkyr*2): 
+          Ekxkyr[ix,iy]=np.mean(Ekxkyds[ix1+ix*nxavg+di1:ix1+ix*nxavg+di2,iy1+iy*nyavg+dj1:iy1+iy*nyavg+dj2].flatten())
+          Ekxkyp[ix,iy]=np.mean(Ekxkydp[ix1+ix*nxavg+di1:ix1+ix*nxavg+di2,iy1+iy*nyavg+dj1:iy1+iy*nyavg+dj2].flatten())
+
+
+    Eta_WW3=Ekxkyr   # this is the WW3 spectrum on SWOT grid + double-sided
+        
+    Sw_obp_H  = H  * Hazc * Eta_WW3   #  without PTR ... should be removed 
+    Sw_obp_H2 = H3 * Eta_WW3
+# 4) Downsample in space to the target spatial frequency
+    fx_alias, fy_alias, Sw_alias_H = compute_aliased_spectrum_2D(f_xt, f_at, Sw_obp_H, 1/0.250, 1/0.235, nrep=1)
+    fx_alias, fy_alias, Sw_alias_H2 = compute_aliased_spectrum_2D(f_xt, f_at, Sw_obp_H2, 1/0.250, 1/0.235, nrep=1)
+    
+    
+    # SOME CLEAN UP WILL BE GOOD BELOW ... 
+    Eta_WW3_c=Ekxkyr[ik1:ik2,jk1:jk2].T           # this is the WW3 spectrum*OBP filter with alias effect 
+    Eta_WW3_obp_H=Sw_alias_H[ik1:ik2,jk1:jk2].T   # without az cut-off effect
+    Eta_WW3_obp_H2=Sw_alias_H2[ik1:ik2,jk1:jk2].T
+# Also computes the spectrum without aliasing to check on filter + aliasing effects 
+    Eta_WW3_noa_H2=Sw_obp_H2[ik1:ik2,jk1:jk2].T
+    Eta_WW3_res= H3[ik1:ik2,jk1:jk2].T * Ekxkyp[ik1:ik2,jk1:jk2].T
+
+    return Eta_WW3_obp_H2,Eta_WW3_obp_H,Eta_WW3_noa_H2,Eta_WW3_res,Eta_WW3_c,Ekxky,kxm,kym,ix1,iy1
 ###################################################################
 def  SWOTspec_to_HsLm(Ekxky,kx2,ky2,swell_mask,Hhat2,trackangle)  :
     '''
@@ -41,11 +134,13 @@ def  SWOTspec_to_HsLm(Ekxky,kx2,ky2,swell_mask,Hhat2,trackangle)  :
         E_mask=np.where( swell_mask > 0.5, np.divide(Ekxky,Hhat2),0) 
         dkx=kx2[0,1]-kx2[0,0]
         dky=ky2[1,0]-ky2[0,0]
-        varmask=np.sum(E_mask.flatten())*dkx*dky*2;  # WARNING: this is only correct if the mask is only over half of the spectral domain!!
+        varmask=np.sum(E_mask.flatten())*dkx*dky*2;  # WARNING: factor 2  is only correct if the mask is only over half of the spectral domain!!
         Hs_SWOT=4*np.sqrt(varmask)
 
         kn=np.sqrt(kx2**2+ky2**2)
         m0=np.sum(E_mask.flatten())
+        mQ=np.sum((E_mask.flatten())**2)
+        Q18=np.sqrt(mQ/(m0**2*dkx*dky))/(2*np.pi)
         inds=np.where(kn.flatten() > 5E-4)[0]
         mm1=np.sum(E_mask.flatten()[inds]/kn.flatten()[inds])
         mp1=np.sum(np.multiply(E_mask,kn).flatten())
@@ -61,7 +156,7 @@ def  SWOTspec_to_HsLm(Ekxky,kx2,ky2,swell_mask,Hhat2,trackangle)  :
         dm_SWOT=np.mod(90-(-trackangle+shift180+np.arctan2(sinm_SWOT,cosm_SWOT)*180/np.pi),360) # converted to direction from, nautical
     else :
         Hs_SWOT=NaN,Lmm1_SWOT=NaN,Lmp1_SWOT=NaN,dm_SWOT=NaN
-    return Hs_SWOT,Lmm1_SWOT,Lmp1_SWOT,dm_SWOT
+    return Hs_SWOT,Lmm1_SWOT,Lmp1_SWOT,dm_SWOT,Q18
 
 
 ###################################################################
@@ -279,7 +374,7 @@ def SWOTdefine_swell_mask_simple(Eta,coh,ang,medsig0,dlat,kx2,ky2,cohthr=0.3,cfa
 ###################################################################
 # modpec,inds=swell.SWOTfind_model_spectrum(ds_ww3t,loncr,latcr,timec)
 def SWOTdefine_swell_mask(mybox,mybos,flbox,dy,dx,nm,mm,Eta,coh,ang,dlat,mask_choice,kx2,ky2,kn,cohthr,cfac,n,m,nkxr,nkyr,\
-             kxmin=-0.003,kxmax=0.003,kymin=-0.003,kymax=0.003):
+             kxmin=-0.003,kxmax=0.003,kymin=-0.003,kymax=0.003,verbose=0):
     cohm=coh
     kx2m=kx2
     ky2m=ky2
@@ -339,11 +434,10 @@ def SWOTdefine_swell_mask(mybox,mybos,flbox,dy,dx,nm,mm,Eta,coh,ang,dlat,mask_ch
        Etam=np.where(kx2 <= kxmax,Etam,0)
        Etam=np.where(ky2 >= kymin,Etam,0)
        Etam=np.where(ky2 <= kymax,Etam,0)
-       print('Emax:',np.max(Etam.flatten()),kxmin,kxmax,kymin,kymax)
+       #print('Emax:',np.max(Etam.flatten()),kxmin,kxmax,kymin,kymax)
        Emax=4/np.max(Etam.flatten())
        amask=Etam*Emax
        amask=ndimage.binary_dilation((amask > 0.5).astype(int)) 
-       #amask=ndimage.binary_dilation((amask > 0.5).astype(int)) 
        maskset=7
 
     ind=np.where(amask.flatten() > 0.5)[0]
@@ -390,11 +484,51 @@ def SWOTdefine_swell_mask(mybox,mybos,flbox,dy,dx,nm,mm,Eta,coh,ang,dlat,mask_ch
 
     bmask=ndimage.binary_dilation((amask > 0.5).astype(int))
 
-    print('Swell mask option:',maskset,cohOK,mask_choice,cohthr,cohmax,ncoh,medsig0)
+    if verbose > 0:
+       print('Swell mask option:',maskset,cohOK,mask_choice,cohthr,cohmax,ncoh,medsig0)
 
     return amask,bmask
 
 
+#######################" Plotting routines ########################
+def draw_mask(axsfig,kx2,dkx,ky2,dky,vertices,color='k',lw=3):
+    for ind in range(len(vertices) // 4):
+        xy2=np.asarray(vertices[ind*4:(ind+1)*4], dtype=np.float64)
+        axsfig.plot(kx2[0,0]*1000+1000*dkx*xy2[0:2],ky2[0,0]*1000+1000*dky*xy2[2:4], color=color,lw=lw)
+
+
+def plot_cur(axs,td,yt,latc,globlon,globlat,U,V,lightcmap):
+       if (td =='descending'):
+          ind=np.where(yt >= latc)[0]
+       else:
+          ind=np.where(yt <= latc)[0]
+       im=axs[1].pcolormesh(globlon,globlat,np.sqrt(U**2+V**2), cmap=lightcmap,rasterized=True,shading='nearest',vmin = 0, vmax =1)
+       _=axs[1].set_title('Globcurrent map' )
+       plt.setp(axs[1].get_yticklabels(), visible=False)
+       axs[1].scatter(xt[ind],yt[ind],c='r',marker='+',s=30,linewidth=2)
+    
+
+def plot_spec(kx2,dkx,ky2,dky,Eta,dBE,vertices):
+    fig,axs= plt.subplots(nrows=1, ncols=2,figsize=(6,3.5))
+    #spec = mpl.gridspec.GridSpec(ncols=2, nrows=1,width_ratios=[6, 5])
+    plt.subplots_adjust(left=0.05,bottom=0.10, top=0.92,wspace=0.1,right=0.99)
+    im=axs[0].pcolormesh(kx2*1000,ky2*1000,10*np.log10((Eta)),norm = mcolors.Normalize(vmin=-10+dBE, vmax=30+dBE),rasterized=True)
+    _=axs[0].set_title('SWOT spectrum' )
+    draw_mask(axs[1],kx2,dkx,ky2,dky,vertices,color='w',lw=3)
+    return fig,axs
+    
+def plot_coh(kx2,dkx,ky2,dky,coh,ang,vertices):
+    fig,axs=plt.subplots(1,2,figsize=(6,3))
+    plt.subplots_adjust(left=0.05,bottom=0.1, top=0.92,wspace=0.1,right=0.99)
+    im=axs[0].pcolormesh(kx2*1000,ky2*1000,coh,cmap='viridis',rasterized=True,vmin = 0., vmax =1)
+    draw_mask(axs[1],kx2,dkx,ky2,dky,vertices,color='w',lw=3)
+    _=axs[0].set_title('coherence')
+      
+    im=axs[1].pcolormesh(kx2*1000,ky2*1000,ang,cmap='seismic',rasterized=True,norm = mcolors.Normalize(vmin=-180, vmax=180))
+    _=axs[1].set_title('phase' )
+    draw_mask(axs[1],kx2,dkx,ky2,dky,vertices,color='k',lw=3)
+    plt.setp(axs[1].get_yticklabels(), visible=False)
+    return fig,axs
 
 ###################################################################
 def  SWOT_save_spectra(pth_results,filenopath,modelfound,cycle,tracks,side,boxindices,\
@@ -427,44 +561,111 @@ def  SWOT_save_spectra(pth_results,filenopath,modelfound,cycle,tracks,side,boxin
                 modelfound=modelfound)    
 
 ###################################################################
-def  SWOT_create_L3_spectra(saving_name,filenopath,modelOK,nkxr,nkyr):
+def  SWOT_create_L3_spectra(saving_name,filenopath,modelOK,restab,nkxtab,nkytab,modf=0,moddf=0,modang=0):
      SL3_nc_fid = Dataset(saving_name, 'w',format='NETCDF3_CLASSIC')
      SL3_nc_fid.createDimension('time', None)
+     SL3_nc_fid.createDimension('nind', 4)
      SL3_nc_fid.createDimension('nboy_40',1)
      SL3_nc_fid.createDimension('nbox_40',2)
-     SL3_nc_fid.createDimension('nboy_20',4)
+     SL3_nc_fid.createDimension('nboy_20',2)
      SL3_nc_fid.createDimension('nbox_20',6)
-     SL3_nc_fid.createDimension('nboy_10',8)
+     SL3_nc_fid.createDimension('nboy_10',4)
      SL3_nc_fid.createDimension('nbox_10',14)
-     SL3_nc_fid.createDimension('nkyr',nkyr)
-     SL3_nc_fid.createDimension('nkxr',nkxr)
+     sres0=sres=f'{restab[0]:02d}'
+     for indres in range(len(restab)): 
+        ires=restab[indres]
+        sres=f'{ires:02d}'
+        SL3_nc_fid.createDimension('nky_'+sres,nkytab[indres])
+        SL3_nc_fid.createDimension('nkx_'+sres,nkxtab[indres])
+     if modelOK > 0:
+        nf=len(modf)
+        ntheta=len(modang)
+        SL3_nc_fid.createDimension('nf',nf)
+        SL3_nc_fid.createDimension('ntheta',ntheta)
 
-     SL3_nc_var = SL3_nc_fid.createVariable('kx2', np.float32, ('nkyr', 'nkxr'))
-     SL3_nc_var.setncatts({'long_name': u"spatial_frequency", \
-                    'units': u"cycles per meter", \
-                    'comment': u"kx is cross-track to right"})
+     time = SL3_nc_fid.createVariable('time', np.float64, ('time'))
+     #time.units = 'days since 1990-01-01'
+     time.units = 'seconds since 2000-01-01 00:00:00.0'
+     time.long_name = 'time'
 
-     SL3_nc_ky2 = SL3_nc_fid.createVariable('ky2', np.float32, ('nkyr', 'nkxr'))
-     SL3_nc_ky2.setncatts({'long_name': u"spatial_frequency", \
-                    'units': u"cycles per meter", \
-                    'comment': u"ky is along-track"})
+     boxindices= SL3_nc_fid.createVariable('boxindices_40', np.float64, ('time','nboy_40','nbox_40','nind'))
+     boxindices.setncatts({'comment': u"these are along-track indices j1, j2  followed by cross-track indices i1, i2"})
 
-     time = SL3_nc_fid.createVariable('time', np.float64, ('time',))
-
+     
+     
      SL3_nc_track = SL3_nc_fid.createVariable('trackangle', np.float32, ('time'))
      SL3_nc_track.setncatts({'long_name': u"track_angle", \
                     'units': u"degrees", \
                     'comment': u"clockwise_blabla"})
+                    
+     SL3_nc_var = SL3_nc_fid.createVariable('Q18_40', np.float32, ('time','nboy_40','nbox_40'))
+     for indres in range(len(restab)): 
+        ires=restab[indres]
+        sres=f'{ires:02d}'
+
+# Integrated parameters and statistics 
+        SL3_nc_var = SL3_nc_fid.createVariable('longitude_'+sres, np.float32, ('time','nboy_'+sres,'nbox_'+sres))
+        SL3_nc_var = SL3_nc_fid.createVariable('latitude_'+sres, np.float32, ('time','nboy_'+sres,'nbox_'+sres))
+        SL3_nc_var = SL3_nc_fid.createVariable('sigma0_mean_'+sres, np.float32, ('time','nboy_'+sres,'nbox_'+sres))
+        SL3_nc_var = SL3_nc_fid.createVariable('sigma0_std_'+sres, np.float32, ('time','nboy_'+sres,'nbox_'+sres))
+               
+        SL3_nc_var = SL3_nc_fid.createVariable('H18_'+sres, np.float32, ('time','nboy_'+sres,'nbox_'+sres))
+        SL3_nc_var = SL3_nc_fid.createVariable('L18_'+sres, np.float32, ('time','nboy_'+sres,'nbox_'+sres))
+        SL3_nc_var = SL3_nc_fid.createVariable('d18_'+sres, np.float32, ('time','nboy_'+sres,'nbox_'+sres))
+
+        SL3_nc_var = SL3_nc_fid.createVariable('quality_flag_frac_'+sres, np.float32, ('time','nboy_'+sres,'nbox_'+sres))
+
+# Spectral coordinates 
       
-     SL3_nc_varE4 = SL3_nc_fid.createVariable('E_SWOT_40km', np.float32, ('time','nboy_40','nbox_40','nkyr', 'nkxr'))
-     SL3_nc_varE4.setncatts({'long_name': u"spatial_frequency", \
-                    'units': u"m**4"})                   
-     SL3_nc_varE2 = SL3_nc_fid.createVariable('E_SWOT_20km', np.float32, ('time','nboy_20','nbox_20','nkyr', 'nkxr'))
-     SL3_nc_varE2.setncatts({'long_name': u"spatial_frequency", \
-                    'units': u"m**4"})                   
-     SL3_nc_varE1 = SL3_nc_fid.createVariable('E_SWOT_10km', np.float32, ('time','nboy_10','nbox_10','nkyr', 'nkxr'))
-     SL3_nc_varE1.setncatts({'long_name': u"spatial_frequency", \
-                    'units': u"m**4"})                   
+        SL3_nc_var = SL3_nc_fid.createVariable('kx2_'+sres, np.float32, ('nky_'+sres, 'nkx_'+sres))
+        SL3_nc_var.setncatts({'long_name': u"spatial_frequency", \
+                    'units': u"cycles per meter", \
+                    'comment': u"kx is cross-track to right"})
+
+        SL3_nc_var = SL3_nc_fid.createVariable('ky2_'+sres, np.float32, ('nky_'+sres, 'nkx_'+sres))
+        SL3_nc_var.setncatts({'long_name': u"spatial_frequency", \
+                    'units': u"cycles per meter", \
+                    'comment': u"ky is along-track"})
+
+        SL3_nc_filt = SL3_nc_fid.createVariable('filter_'+sres, np.float32, ('nky_'+sres, 'nkx_'+sres))
+        SL3_nc_filt.setncatts({'long_name': u"instrument_filter_OBP_and_PTR", 'units': u"1"})
+
+
+ 
+# For higher resolution: only spectra and integrated parameters 
+        SL3_nc_varE4 = SL3_nc_fid.createVariable('E_SWOT_'+sres, np.float32, ('time','nboy_'+sres,'nbox_'+sres,'nky_'+sres, 'nkx_'+sres), zlib=True)
+        SL3_nc_varE4.setncatts({'long_name': u"PSD of surface elevation over 40 km side box", 'units': u"m**4"})                   
+        SL3_nc_varE4 = SL3_nc_fid.createVariable('mask_'+sres, np.byte, ('time','nboy_40','nbox_40','nky_'+sres, 'nkx_'+sres))
+        SL3_nc_varE4.setncatts({'long_name': u"mask_for_wind_sea_and_swell"})
+
+     SL3_nc_varE4 = SL3_nc_fid.createVariable('coh_SWOT_40', np.float32, ('time','nboy_40','nbox_40','nky_40', 'nkx_40'))
+     SL3_nc_varE4.setncatts({'long_name': u"cohenrence between SSH and sigma0 over 40 km side box",   'units': u"1"})                
+     SL3_nc_varE4 = SL3_nc_fid.createVariable('ang_SWOT_40', np.float32, ('time','nboy_40','nbox_40','nky_40', 'nkx_40'))
+     SL3_nc_varE4.setncatts({'long_name': u"mean phase shift between SSH and sigma0 over 40 km side box",  'units': u"1"})     
+     SL3_nc_varE4 = SL3_nc_fid.createVariable('crosr_SWOT_40', np.float32, ('time','nboy_40','nbox_40','nky_40', 'nkx_40'))
+     SL3_nc_varE4.setncatts({'long_name': u"real part of cross-spectrum between SSH and sigma0 over 40 km side box",  'units': u"rad"})                
+
+
+     if modelOK > 0:
+        SL3_nc_var = SL3_nc_fid.createVariable('frequency', np.float32, ('nf'))
+        SL3_nc_var = SL3_nc_fid.createVariable('df', np.float32, ('nf'))
+        SL3_nc_var = SL3_nc_fid.createVariable('direction', np.float32, ('ntheta'))
+        SL3_nc_var = SL3_nc_fid.createVariable('efth', np.float32, ('time','nboy_40','nbox_40','nf','ntheta'), zlib=True)
+        SL3_nc_var = SL3_nc_fid.createVariable('longitude_model', np.float32, ('time','nboy_40','nbox_40'))
+        SL3_nc_var = SL3_nc_fid.createVariable('latitude_model', np.float32, ('time','nboy_40','nbox_40'))
+        SL3_nc_var = SL3_nc_fid.createVariable('time_model', np.float32, ('time','nboy_40','nbox_40'))
+        ires=restab[0]
+        sres=f'{ires:02d}'
+        SL3_nc_var = SL3_nc_fid.createVariable('Q18_model', np.float32, ('time','nboy_'+sres,'nbox_'+sres))
+        SL3_nc_var = SL3_nc_fid.createVariable('H18_model', np.float32, ('time','nboy_'+sres,'nbox_'+sres))
+        SL3_nc_var = SL3_nc_fid.createVariable('L18_model', np.float32, ('time','nboy_'+sres,'nbox_'+sres))
+        SL3_nc_var = SL3_nc_fid.createVariable('d18_model', np.float32, ('time','nboy_'+sres,'nbox_'+sres))
+        SL3_nc_var = SL3_nc_fid.createVariable('Hs_model', np.float32, ('time','nboy_'+sres,'nbox_'+sres))
+        SL3_nc_var = SL3_nc_fid.createVariable('Tm02_model', np.float32, ('time','nboy_'+sres,'nbox_'+sres))
+        SL3_nc_var = SL3_nc_fid.createVariable('lambdac_model', np.float32, ('time','nboy_'+sres,'nbox_'+sres))
+        SL3_nc_var = SL3_nc_fid.createVariable('Qkk_model', np.float32, ('time','nboy_'+sres,'nbox_'+sres))
+        SL3_nc_var = SL3_nc_fid.createVariable('U10_model', np.float32, ('time','nboy_'+sres,'nbox_'+sres))
+        SL3_nc_var = SL3_nc_fid.createVariable('Udir_model', np.float32, ('time','nboy_'+sres,'nbox_'+sres))
  
 #   if modelfound==1:
      return SL3_nc_fid
