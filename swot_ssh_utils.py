@@ -51,6 +51,27 @@ def subset(data_in,lat_bounds):
         subset_data = xr.Dataset(subset_vars, attrs=data_in.attrs)
         return subset_data,i0,i1
 
+def subset_nadir(data_in,lat_bounds):
+        lat=np.nanmean(data_in['lat_20hz'].data,axis=-1)
+        lat=np.where(np.isnan(lat),100,lat)
+        l0,l1=lat_bounds
+        i0=np.where(np.abs(lat-l0)==np.abs(lat-l0).min())[0][0]
+        i1=np.where(np.abs(lat-l1)==np.abs(lat-l1).min())[0][0]
+        if i0>i1:i0,i1=i1,i0
+        if i0==i1:
+            return []
+        #sub = data_in.sel(num_lines=slice(i0, i1))
+        # Subset all variables that share the latitude dimension
+        subset_vars = {}
+        for varname, var in data_in.data_vars.items():
+            if var.dims==2:
+                subset_vars[varname] = var[i0:i1,:]
+            else:
+                subset_vars[varname] = var[i0:i1]
+        # Combine the subset variables into a new dataset
+        subset_data = xr.Dataset(subset_vars, attrs=data_in.attrs)
+        return subset_data,i0,i1
+
 
 def plot_a_segment(ax,lon,lat,dat,title='',cblab='meter', 
            vmin=-0.5,vmax=0.5):

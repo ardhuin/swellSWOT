@@ -339,6 +339,17 @@ def SWOTdefine_swell_mask_simple(Eta,coh,ang,medsig0,dlat,kx2,ky2,cohthr=0.3,cfa
        amask=Etam*Emax*np.sign(-ky2m*dlat)
        amask=ndimage.binary_dilation((amask > 0.5).astype(int)) 
        maskset=6
+    if (mask_choice == -5):
+       Etam=np.where(kx2 >= kxmin,Etam,0)
+       Etam=np.where(kx2 <= kxmax,Etam,0)
+       Etam=np.where(ky2 >= kymin,Etam,0)
+       Etam=np.where(ky2 <= kymax,Etam,0)
+       #print('Emax:',np.max(Etam.flatten()),kxmin,kxmax,kymin,kymax)
+       Emax=4/np.max(Etam.flatten())
+       amask=Etam*Emax
+       amask=ndimage.binary_dilation((amask > 0.5).astype(int)) 
+       maskset=7
+
     
     ind=np.where(amask.flatten() > 0.5)[0]
     if len(ind) >0 :
@@ -614,6 +625,7 @@ def  SWOT_create_L3_spectra(saving_name,filenopath,modelOK,restab,nkxtab,nkytab,
         SL3_nc_var = SL3_nc_fid.createVariable('d18_'+sres, np.float32, ('time','nboy_'+sres,'nbox_'+sres))
 
         SL3_nc_var = SL3_nc_fid.createVariable('quality_flag_frac_'+sres, np.float32, ('time','nboy_'+sres,'nbox_'+sres))
+        SL3_nc_var = SL3_nc_fid.createVariable('quality_flag_mask_'+sres, np.int32, ('time','nboy_'+sres,'nbox_'+sres))
 
 # Spectral coordinates 
       
@@ -627,8 +639,11 @@ def  SWOT_create_L3_spectra(saving_name,filenopath,modelOK,restab,nkxtab,nkytab,
                     'units': u"cycles per meter", \
                     'comment': u"ky is along-track"})
 
-        SL3_nc_filt = SL3_nc_fid.createVariable('filter_'+sres, np.float32, ('nky_'+sres, 'nkx_'+sres))
-        SL3_nc_filt.setncatts({'long_name': u"instrument_filter_OBP_and_PTR", 'units': u"1"})
+        SL3_nc_filt = SL3_nc_fid.createVariable('filter_OBP_'+sres, np.float32, ('nky_'+sres, 'nkx_'+sres))
+        SL3_nc_filt.setncatts({'long_name': u"instrument_filter_OBP", 'units': u"1"})
+
+        SL3_nc_filt = SL3_nc_fid.createVariable('filter_PTR_'+sres, np.float32, ('nky_'+sres, 'nkx_'+sres))
+        SL3_nc_filt.setncatts({'long_name': u"instrument_filter_PTR", 'units': u"1"})
 
 
  
@@ -654,6 +669,7 @@ def  SWOT_create_L3_spectra(saving_name,filenopath,modelOK,restab,nkxtab,nkytab,
         SL3_nc_var = SL3_nc_fid.createVariable('longitude_model', np.float32, ('time','nboy_40','nbox_40'))
         SL3_nc_var = SL3_nc_fid.createVariable('latitude_model', np.float32, ('time','nboy_40','nbox_40'))
         SL3_nc_var = SL3_nc_fid.createVariable('time_model', np.float32, ('time','nboy_40','nbox_40'))
+        SL3_nc_var = SL3_nc_fid.createVariable('index_model', np.int32, ('time','nboy_40','nbox_40'))
         ires=restab[0]
         sres=f'{ires:02d}'
         SL3_nc_var = SL3_nc_fid.createVariable('Q18_model', np.float32, ('time','nboy_'+sres,'nbox_'+sres))

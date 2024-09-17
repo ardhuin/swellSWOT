@@ -181,8 +181,8 @@ def FFT2D_two_arrays(arraya,arrayb,dx,dy,n,isplot=0):
 
     Eta=np.zeros((nxtile,nytile))
     Etb=np.zeros((nxtile,nytile))
-    phase=np.zeros((nxtile,nytile),dtype = 'complex_')
-    phases=np.zeros((nxtile,nytile,mspec),dtype = 'complex_')
+    phase=np.zeros((nxtile,nytile),dtype=np.complex128)
+    phases=np.zeros((nxtile,nytile,mspec),dtype=np.complex128)
     if isplot:
         fig1,ax1=plt.subplots(figsize=(12,6))
         ax1.pcolormesh(X,Y,arraya)
@@ -315,8 +315,8 @@ def FFT2D_two_arrays_nm_detrend(arraya,arrayb,dx,dy,n,m,isplot=0,detrend='linear
 
     Eta=np.zeros((nxtile,nytile))
     Etb=np.zeros((nxtile,nytile))
-    phase=np.zeros((nxtile,nytile),dtype = 'complex_')
-    phases=np.zeros((nxtile,nytile,mspec),dtype = 'complex_')
+    phase=np.zeros((nxtile,nytile),dtype=np.complex128)
+    phases=np.zeros((nxtile,nytile,mspec),dtype=np.complex128)
     if isplot:
         fig1,ax1=plt.subplots(figsize=(12,6))
         ax1.pcolormesh(X,Y,arraya)
@@ -474,8 +474,8 @@ def FFT2D_two_arrays_nm_detrend_flag(arraya,arrayb,arrayf,dx,dy,n,m,isplot=0,det
 
     Eta=np.zeros((nxtile,nytile))
     Etb=np.zeros((nxtile,nytile))
-    phase=np.zeros((nxtile,nytile),dtype = 'complex_')
-    phases=np.zeros((nxtile,nytile,mspec),dtype = 'complex_')
+    phase=np.zeros((nxtile,nytile),dtype=np.complex128)
+    phases=np.zeros((nxtile,nytile,mspec),dtype=np.complex128)
     if isplot:
         fig1,ax1=plt.subplots(figsize=(12,6))
         ax1.pcolormesh(X,Y,arraya)
