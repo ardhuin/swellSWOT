@@ -160,7 +160,7 @@ def  SWOTspec_to_HsLm(Ekxky,kx2,ky2,swell_mask,Hhat2,trackangle)  :
 
 
 ###################################################################
-def  SWOTspec_mask_polygon(Eta,amask)  :
+def  SWOTspec_mask_polygon(amask)  :
     '''
     Computes parameters from SWOT ssh spectrum
     inputs :
@@ -170,12 +170,12 @@ def  SWOTspec_mask_polygon(Eta,amask)  :
             - vertices
 
     '''
-    masked_data = masked_array(Eta, mask=(amask > 0.5) )
+    masked_data = masked_array(amask, mask=(amask > 0.5) )
     # Get coordinates of masked cells
     rows, cols = np.where(masked_data.mask)
     # Iterate through masked cells and draw polygons around them
     vertices = []
-    [nkyr,nkxr]=np.shape(Eta)  
+    [nkyr,nkxr]=np.shape(amask)  
 # Computes polygon for showing the mask position  
     for r, c in zip(rows, cols):
     # Define coordinates of polygon vertices
@@ -288,7 +288,8 @@ def SWOTfind_model_spectrum(ds_ww3t,loncr,latcr,timec) :
 
 ###################################################################
 ###################################################################
-def SWOTdefine_swell_mask_simple(Eta,coh,ang,medsig0,dlat,kx2,ky2,cohthr=0.3,cfac=8,mask_choice=0) :
+def SWOTdefine_swell_mask_simple(Eta,coh,ang,medsig0,dlat,kx2,ky2,cohthr=0.3,cfac=8,mask_choice=0,\
+             kxmin=-0.003,kxmax=0.003,kymin=-0.003,kymax=0.003,verbose=0):
     cohm=coh
     kx2m=kx2
     ky2m=ky2
@@ -508,7 +509,7 @@ def draw_mask(axsfig,kx2,dkx,ky2,dky,vertices,color='k',lw=3):
         axsfig.plot(kx2[0,0]*1000+1000*dkx*xy2[0:2],ky2[0,0]*1000+1000*dky*xy2[2:4], color=color,lw=lw)
 
 
-def plot_cur(axs,td,yt,latc,globlon,globlat,U,V,lightcmap):
+def plot_cur(axs,td,xt,yt,latc,globlon,globlat,U,V,lightcmap):
        if (td =='descending'):
           ind=np.where(yt >= latc)[0]
        else:
@@ -517,7 +518,7 @@ def plot_cur(axs,td,yt,latc,globlon,globlat,U,V,lightcmap):
        _=axs[1].set_title('Globcurrent map' )
        plt.setp(axs[1].get_yticklabels(), visible=False)
        axs[1].scatter(xt[ind],yt[ind],c='r',marker='+',s=30,linewidth=2)
-    
+
 
 def plot_spec(kx2,dkx,ky2,dky,Eta,dBE,vertices):
     fig,axs= plt.subplots(nrows=1, ncols=2,figsize=(6,3.5))
@@ -525,14 +526,14 @@ def plot_spec(kx2,dkx,ky2,dky,Eta,dBE,vertices):
     plt.subplots_adjust(left=0.05,bottom=0.10, top=0.92,wspace=0.1,right=0.99)
     im=axs[0].pcolormesh(kx2*1000,ky2*1000,10*np.log10((Eta)),norm = mcolors.Normalize(vmin=-10+dBE, vmax=30+dBE),rasterized=True)
     _=axs[0].set_title('SWOT spectrum' )
-    draw_mask(axs[1],kx2,dkx,ky2,dky,vertices,color='w',lw=3)
+    draw_mask(axs[0],kx2,dkx,ky2,dky,vertices,color='w',lw=3)
     return fig,axs
     
 def plot_coh(kx2,dkx,ky2,dky,coh,ang,vertices):
     fig,axs=plt.subplots(1,2,figsize=(6,3))
     plt.subplots_adjust(left=0.05,bottom=0.1, top=0.92,wspace=0.1,right=0.99)
     im=axs[0].pcolormesh(kx2*1000,ky2*1000,coh,cmap='viridis',rasterized=True,vmin = 0., vmax =1)
-    draw_mask(axs[1],kx2,dkx,ky2,dky,vertices,color='w',lw=3)
+    draw_mask(axs[0],kx2,dkx,ky2,dky,vertices,color='w',lw=3)
     _=axs[0].set_title('coherence')
       
     im=axs[1].pcolormesh(kx2*1000,ky2*1000,ang,cmap='seismic',rasterized=True,norm = mcolors.Normalize(vmin=-180, vmax=180))
@@ -624,7 +625,7 @@ def  SWOT_create_L3_spectra(saving_name,filenopath,modelOK,restab,nkxtab,nkytab,
         SL3_nc_var = SL3_nc_fid.createVariable('L18_'+sres, np.float32, ('time','nboy_'+sres,'nbox_'+sres))
         SL3_nc_var = SL3_nc_fid.createVariable('d18_'+sres, np.float32, ('time','nboy_'+sres,'nbox_'+sres))
 
-        SL3_nc_var = SL3_nc_fid.createVariable('quality_flag_frac_'+sres, np.float32, ('time','nboy_'+sres,'nbox_'+sres))
+        SL3_nc_var = SL3_nc_fid.createVariable('quality_frac_'+sres, np.float32, ('time','nboy_'+sres,'nbox_'+sres))
         SL3_nc_var = SL3_nc_fid.createVariable('quality_flag_mask_'+sres, np.int32, ('time','nboy_'+sres,'nbox_'+sres))
 
 # Spectral coordinates 
@@ -665,7 +666,7 @@ def  SWOT_create_L3_spectra(saving_name,filenopath,modelOK,restab,nkxtab,nkytab,
         SL3_nc_var = SL3_nc_fid.createVariable('frequency', np.float32, ('nf'))
         SL3_nc_var = SL3_nc_fid.createVariable('df', np.float32, ('nf'))
         SL3_nc_var = SL3_nc_fid.createVariable('direction', np.float32, ('ntheta'))
-        SL3_nc_var = SL3_nc_fid.createVariable('efth', np.float32, ('time','nboy_40','nbox_40','nf','ntheta'), zlib=True)
+        SL3_nc_var = SL3_nc_fid.createVariable('efth_model', np.float32, ('time','nboy_40','nbox_40','nf','ntheta'), zlib=True)
         SL3_nc_var = SL3_nc_fid.createVariable('longitude_model', np.float32, ('time','nboy_40','nbox_40'))
         SL3_nc_var = SL3_nc_fid.createVariable('latitude_model', np.float32, ('time','nboy_40','nbox_40'))
         SL3_nc_var = SL3_nc_fid.createVariable('time_model', np.float32, ('time','nboy_40','nbox_40'))
