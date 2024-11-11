@@ -52,6 +52,10 @@ def spec_settings_for_L3(nres,version):
        samemask=0
        mtab=np.array([8,2,2])
        ntab=np.array([8,2,2])
+    if (version == 'gamma'):
+       samemask=0
+       mtab=np.array([8,2,1])
+       ntab=np.array([8,2,1])
     
     
     indl=421 # alongtrack length of "chunk" of SWOT data being processed: this relatively big number is there because of the movies to get context.
@@ -62,13 +66,13 @@ def spec_settings_for_L3(nres,version):
 
 
 ###################################################################
-def wavespec_Efth_to_kxky_SWOT(efth,modf,moddf, modang,moddth,f_xt,f_at,H,Hazc,H3,kxmax,kymax,dkx,dky,dkxr,dkyr,nkxr,nkyr,doublesided=0,verbose=0,trackangle=0)  :
+def wavespec_Efth_to_kxky_SWOT(efth,modf,moddf, modang,moddth,f_xt,f_at,H,Hazc,H3,kxmax,kymax,dkx,dky,dkxr,dkyr,nkxr,nkyr,depth=3000.,doublesided=0,verbose=0,trackangle=0)  :
 
     dkxf=dkx/3;dkyf=dky/3;   # finer spectral resolution 
     nkx=600;nky=600;	     # not sure this is always high enough ... 
 
     Ekxky,kxm,kym,kx2m,ky2m=wavespec_Efth_to_Ekxky(efth,modf,moddf,modang,moddth, \
-          dkx=dkxf,dky=dkyf,nkx=nkx,nky=nky,doublesided=doublesided,verbose=verbose,trackangle=trackangle)
+          depth=depth,dkx=dkxf,dky=dkyf,nkx=nkx,nky=nky,doublesided=doublesided,verbose=verbose,trackangle=trackangle)
           
     nxavg=round(dkxr/dkxf)   # number of spectral pixels to average
     nyavg=round(dkyr/dkyf)
@@ -116,6 +120,7 @@ def wavespec_Efth_to_kxky_SWOT(efth,modf,moddf, modang,moddth,f_xt,f_at,H,Hazc,H
     Eta_WW3_res= H3[ik1:ik2,jk1:jk2].T * Ekxkyp[ik1:ik2,jk1:jk2].T
 
     return Eta_WW3_obp_H2,Eta_WW3_obp_H,Eta_WW3_noa_H2,Eta_WW3_res,Eta_WW3_c,Ekxky,kxm,kym,ix1,iy1
+    
 ###################################################################
 def  SWOTspec_to_HsLm(Ekxky,kx2,ky2,swell_mask,Hhat2,trackangle)  :
     '''
@@ -250,7 +255,7 @@ def SWOTfind_model_spectrum(ds_ww3t,loncr,latcr,timec) :
         timeww3b=timeww3-np.timedelta64(1800, 's')    
         indt= np.where(ds_ww3t.time==timeww3)[0]
         modelfound=0;dist=1;
-        lonww3=0.;latww3=0.;    
+        lonww3=0.;latww3=0.;dpt=3000.;  
         if (len(indt) >0): 
             sinlat=np.abs(np.sin(latcr*np.pi/180))
             dd= sinlat*np.abs(np.cos(ds_ww3t.longitude[indt].values*np.pi/180)-np.cos(loncr*np.pi/180)) \
@@ -261,6 +266,7 @@ def SWOTfind_model_spectrum(ds_ww3t,loncr,latcr,timec) :
             inds=indt[min_index]
             lonww3=ds_ww3t.longitude[inds].values
             latww3=ds_ww3t.latitude[inds].values
+            dpt=ds_ww3t.dpt[inds].values
             #print('COUCOU lon:',loncr,latcr,timec,timeww3a,'##',len(indt),dist,ds_ww3t.longitude[inds].values,ds_ww3t.latitude[inds].values)
             modspec=ds_ww3t.efth[inds].squeeze()
             U10=ds_ww3t.wnd[inds].values
@@ -283,7 +289,7 @@ def SWOTfind_model_spectrum(ds_ww3t,loncr,latcr,timec) :
             inds=0
             print('Did not find model spectrum for location (lon,lat):',loncr,latcr,' at time ',timeww3, \
                   '. Min dist was:',dist,'for this model point:', lonww3,latww3)
-        return modspec,inds,modelfound,timeww3,lonww3,latww3,dist,U10,Udir
+        return modspec,inds,modelfound,timeww3,lonww3,latww3,dist,U10,Udir,dpt
 
 
 ###################################################################
@@ -369,6 +375,10 @@ def SWOTdefine_swell_mask_simple(Eta,coh,ang,medsig0,dlat,kx2,ky2,cohthr=0.3,cfa
       
     # Forces mask : here are a few choices ... 
        
+    if mask_choice==0:
+        amask=np.multiply(np.where(abs(kx2-0.5*(kxmin+kxmax)) <= 0.5*(kxmax-kxmin),1,0),   \
+                          np.where(abs(ky2-0.5*(kymin+kymax)) <= 0.5*(kymax-kymin),1,0))
+        maskset=10
     if mask_choice==1:
         amask=np.multiply(np.where(abs(kx2) <= 0.0006,1,0),np.where(abs(ky2-0.0015) <= 0.0005,1,0))
         maskset=11
@@ -485,7 +495,10 @@ def SWOTdefine_swell_mask(mybox,mybos,flbox,dy,dx,nm,mm,Eta,coh,ang,dlat,mask_ch
         amask[r,c]=0
       
     # Forces mask : here are a few choices ... 
-       
+    if mask_choice==0:
+        amask=np.multiply(np.where(abs(kx2-0.5*(kxmin+kxmax)) <= 0.5*(kxmax-kxmin),1,0),   \
+                          np.where(abs(ky2-0.5*(kymin+kymax)) <= 0.5*(kymax-kymin),1,0))
+        maskset=10
     if mask_choice==1:
         amask=np.multiply(np.where(abs(kx2) <= 0.0006,1,0),np.where(abs(ky2-0.0015) <= 0.0005,1,0))
         maskset=11

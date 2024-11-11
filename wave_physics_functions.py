@@ -9,7 +9,7 @@ from scipy.interpolate import griddata
 ###################### 
 ######################  
 # [Ekxky,kx,ky,kx2,ky2] = wavespec_Efth_to_Ekxky(eft1s,fren,dfreq,dirn,dth,dkx=0.0001,dky=0.0001,nkx=250,nky=250,doublesided=0) 
-def  wavespec_Efth_to_Ekxky(eft1s,fren,dfreq,dirn,dth,dkx=0.0001,dky=0.0001,nkx=250,nky=250,doublesided=1,verbose=0,doplot=0,trackangle=0)  :
+def  wavespec_Efth_to_Ekxky(eft1s,fren,dfreq,dirn,dth,depth=3000.,dkx=0.0001,dky=0.0001,nkx=250,nky=250,doublesided=1,verbose=0,doplot=0,trackangle=0)  :
     '''
     Converts E(f,theta) spectrum from buoy or model to E(kx,ky) spectrum similar to image spectrum
     2023/11/14: preliminary version, assumes dfreq is symmetric (not eaxctly true with WW3 output and waverider data) 
@@ -42,6 +42,8 @@ def  wavespec_Efth_to_Ekxky(eft1s,fren,dfreq,dirn,dth,dkx=0.0001,dky=0.0001,nkx=
 
 #plt.pcolormesh(fren, dirm, np.log10(eftm).T)
     km=(2*np.pi*frem)**2/(grav*2*np.pi)   # cycles / meter
+    for ii in range(nf):
+       km[ii]=k_from_f(frem[ii],D=depth)/(2*np.pi)            # finite water depth
     km2=np.tile(km.reshape(nf+1,1),(1,nt+1))
 
 # eftn*df*dth = Ek*k*dk*dth -> Ek = efth *df /(k * dk)  =  efth *Cg /k

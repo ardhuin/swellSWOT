@@ -421,7 +421,7 @@ def FFT2D_two_arrays_nm_detrend(arraya,arrayb,dx,dy,n,m,isplot=0,detrend='linear
     return Eta,Etb,ang,angstd,coh,crosr,phases,kx2,ky2,dkxtile,dkytile,arrayad,arraybd
 
 ##############################################################################
-def FFT2D_two_arrays_nm_detrend_flag(arraya,arrayb,arrayf,dx,dy,n,m,isplot=0,detrend='linear',ffill='median'):
+def FFT2D_two_arrays_nm_detrend_flag(arraya,arrayb,arrayf,dx,dy,n,m,isplot=0,detrend='linear',ffill='median',threshland=0):
 # Welch-based 2D spectral analysis
 # nxa, nya : size of arraya
 # dx,dy : resolution of arraya
@@ -541,6 +541,7 @@ def FFT2D_two_arrays_nm_detrend_flag(arraya,arrayb,arrayf,dx,dy,n,m,isplot=0,det
 
         array1=np.double(arraya[ix1:ix2+1,iy1:iy2+1])
         array2=np.double(arrayb[ix1:ix2+1,iy1:iy2+1])
+        arrays=array2
         array3=np.double(arrayf[ix1:ix2+1,iy1:iy2+1])
         if isplot:
             ax1.plot(X[[ix1,ix1,ix2,ix2,ix1]],Y[[iy1,iy2,iy2,iy1,iy1]],'-',color=colors[m],linewidth=2)
@@ -603,20 +604,28 @@ def FFT2D_two_arrays_nm_detrend_flag(arraya,arrayb,arrayf,dx,dy,n,m,isplot=0,det
             detrendb = array2-Z2
           elif detrend=='quadratic':
             # Fits a plane using least squares
-            nxy=nxtile*nytile
+            
             X=np.arange(nxtile)
             Y=np.arange(nytile)
             X2,Y2 = np.meshgrid(X,Y,indexing='ij')
             # print('X2 size:',np.shape(arraya),np.shape(X2)) : these are same size with ij indexing
-            XX = X2.T.flatten()
-            YY = Y2.T.flatten()
+#            ZZ2 = arrays.T.flatten()
+            ZZ2 = arrays.T.flatten()
+            inds=np.where(ZZ2 > threshland)[0]
+            nxy=len(inds) #nxtile*nytile
+            #print('COUCOU:',im,nxy,nxy/(nxtile*nytile))
+            XX = X2.T.flatten()[inds]
+            YY = Y2.T.flatten()[inds]
+            
             A = np.c_[XX*XX,YY*YY,XX*YY,XX,YY, np.ones(nxy)]
-            ZZ = array1.T.flatten()
-        
+            ZZ = array1.T.flatten()[inds]
+            
+            
             C,_,_,_ = scipy.linalg.lstsq(A,ZZ)    # coefficients
             Z2 = C[0]*X2*X2 + C[1]*Y2*Y2 + C[2]*X2*Y2 + C[3]*X2 + C[4]*Y2 + C[5]
             detrenda = array1- Z2
-            ZZ = array2.T.flatten()
+            
+            ZZ = array2.T.flatten()[inds]
             C,_,_,_ = scipy.linalg.lstsq(A, ZZ)    # coefficients
             Z2 = C[0]*X2*X2 + C[1]*Y2*Y2 + C[2]*X2*Y2 + C[3]*X2 + C[4]*Y2 + C[5]
             detrendb = array2-Z2
