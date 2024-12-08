@@ -522,6 +522,19 @@ def draw_mask(axsfig,kx2,dkx,ky2,dky,vertices,color='k',lw=3):
         axsfig.plot(kx2[0,0]*1000+1000*dkx*xy2[0:2],ky2[0,0]*1000+1000*dky*xy2[2:4], color=color,lw=lw)
 
 
+#######################" Plotting routines ########################
+def arrows_on_spectrum(axsfig,flip,trackangle,color='k',lw=3,fs1=20):
+    arx0=0;ary0=0;arxd=0.5;aryd=0.5;arwid=1;gr=[0.,1,0.]
+    sflip=-1+2*(1-flip)
+    axsfig.arrow(arx0, ary0, arxd*np.sflip*np.sin(trackangle*np.pi/180), -sflip*aryd*np.cos(trackangle*np.pi/180), linewidth=4,color='k',head_width=arwid) 
+    axsfig.text(arx0+arxd*1.4*sflip*np.sin(trackangle*np.pi/180),ary0-sflip*aryd*1.4*np.cos(trackangle*np.pi/180),'N',fontsize=fs1)
+    axsfig.arrow(arx0, ary0, 0., 5*sflip, linewidth=4,color=gr,head_width=arwid) 
+    axsfig.text(arx0+0.4*arxd,ary0+aryd*1.2*sflip,'Vsat',fontsize=fs1,color=gr)
+    axsfig.arrow(arx0, ary0 ,  arxd*Look, 0, linewidth=4,color=gr,head_width=arwid) 
+    axsfig.text(arx0+arxd*(1.5*Look-0.5),ary0-2,'Look',fontsize=fs1,color=gr)
+
+#######################" Plotting routines ########################
+
 def plot_cur(axs,td,xt,yt,latc,globlon,globlat,U,V,lightcmap):
        if (td =='descending'):
           ind=np.where(yt >= latc)[0]
@@ -768,3 +781,58 @@ def  SWOT_denoise_isotropic(Ekxky,kx2,ky2,ndir=0,verbose=0)  :
         print('Hs1,Hs2:',Hs1,Hs2)
 
     return Ekth,kn1,theta1,Ekxky_nonoise
+
+    
+###################################################################    
+def dist_sphere(lo1,lo2,la1,la2):
+    '''
+    Computes spherical distance in radians 
+    inputs :
+            - lo1,lo2,la1,la2 : longitudes and latidudes (in degrees) 
+    output : 
+            - alpha : spherical distance from (lo1,la1) to (lo2,la2), in radians
+            - beta1 : heading of great circle at (lo1,la1) that goes to (lo2,la2), in radians
+
+    '''
+    dtor=np.pi/180
+    alpha=np.arccos(np.sin(la2*dtor)*np.sin(la1*dtor)+np.cos(la2*dtor)*np.cos(la1*dtor)*np.cos((lo2-lo1)*dtor))
+    
+    denom=(np.sin(alpha)*np.cos(la1*dtor))
+    if (abs(denom) > 0.):
+        ratio=(np.sin(la2*dtor)-np.cos(alpha)*np.sin(la1*dtor))/denom
+        if (np.abs(ratio) > 1):
+            ratio=np.sign(ratio)
+        # Law of cosines to get cos(beta1)
+        beta1 =np.arccos(ratio)
+        # Law of sines to get sin(beta1)
+        if (alpha > 0): 
+            sinbeta=np.sin((lo2-lo1)*dtor)*np.cos(la2*dtor)/np.sin(alpha) 
+            if (sinbeta < 0): 
+                beta1=-beta1
+    else:
+        beta1=0.
+    #beta2 =np.arccos((np.sin(la1*dtor)-np.cos(alpha)*np.sin(la2*dtor))/(np.sin(alpha)*np.cos(la2*dtor)))
+    #beta2=np.arctan2(np.sin(lo2-lo1)*np.cos(la2),np.cos(la1)*np.sin(la2)-np.sin(la1)*np.cos(la2)*np.cos(lo2-lo1))
+    #beta3=np.arctan2(np.sin(lo1-lo2)*np.cos(la1),np.cos(la2)*np.sin(la1)-np.sin(la2)*np.cos(la1)*np.cos(lo1-lo2))
+
+    return alpha,beta1 #,beta2    
+    
+###################################################################
+def SWOTdefine_swell_mask_storm(kx2,ky2,trackangle,lo1,la1,lo2,la2,tds,tola=6E5,thrcos=0.97):
+    alpha,beta=dist_sphere(lo2,lo1,la2,la1)
+    dtor=np.pi/180
+    dalpha=alpha*4E7/(2*np.pi)
+    Cgt=dalpha/tds
+    kt=9.81/(2*Cgt)**2/(2*np.pi)
+    kt2=kt*dalpha/(dalpha-tola)
+    kt1=kt*dalpha/(dalpha+tola)
+
+    kn=np.sqrt(kx2**2+ky2**2)
+    km=np.where((kn <kt2) & (kn > kt1),1,0)
+
+    the=np.arctan2(kx2,ky2)/dtor
+    amask=np.where((km*np.cos(beta-trackangle*dtor-the*dtor) > thrcos),1,0)
+
+    bmask=ndimage.binary_dilation((amask > 0.5).astype(int))
+
+    return amask,bmask

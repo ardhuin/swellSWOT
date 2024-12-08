@@ -116,6 +116,104 @@ def  wavespec_Efth_to_first3(efth,fren,dfreq,dirn,dth,cut=1E4)  :
     sth1m=np.sqrt(np.abs(2.0*(1-m1)))/d2r
     return Ef,th1m,sth1m,Hs,Tm0m1,Tm02,Qf,Qkk
 
+#############################################################################
+def  wavespec_Ekxky_to_first3(Ekxky,kx2,ky2,f_max=0.15,trackangle=0,depth=1000)  :
+    '''
+    Computes first 3 moments from E(kx,ky) spectrum
+    inputs :
+            - Ekxky : spectrum
+    output : 
+            - Ef, th1m, sth1m ... 
+
+    '''
+    ky=ky2[:,0]   # warning: these are in cycles / m, not rad/m 
+    kx=kx2[0,:]
+    tpi=np.pi*2
+    d2r=np.pi/180
+    grav=9.81
+    k2=np.sqrt(kx2**2+ky2**2)
+    f2=np.sqrt((grav*tpi)*k2*np.tanh(k2*(tpi*depth)))/tpi
+    Cg2=f2/(2*k2)  # need depth correction
+    jacobian=k2/Cg2  
+    
+    cartesian_interpolator = interp.RegularGridInterpolator((ky, kx), Ekxky*jacobian, method='linear', fill_value=None)
+# Define the polar grid (r, theta)
+    df=0.005
+    f_min = 0.025
+    num_f=int((f_max-f_min)/df)+1
+
+    fren = np.linspace(f_min, f_max, num_f)
+    dfreq=np.zeros(num_f)+df
+    km=(2*np.pi*fren)**2/(grav*2*np.pi)   # cycles / meter
+    
+    print('Interp:',fren)
+    for ii in range(num_f):
+       km[ii]=k_from_f(fren[ii],D=depth)/(2*np.pi)            # finite water depth
+
+
+    nth=72
+    theta = np.linspace(0, 360,nth+1)
+    dth=(theta[1]-theta[0])*d2r
+    K, Theta = np.meshgrid(km, theta*d2r)
+
+
+    
+# Convert polar grid to Cartesian coordinates (x, y)
+    X_polar = K * np.cos(Theta-trackangle*d2r)
+    Y_polar = K * np.sin(Theta-trackangle*d2r)
+
+    cartesian_points = np.vstack([X_polar.ravel(), Y_polar.ravel()]).T
+    polar_values = cartesian_interpolator(cartesian_points)
+
+# Step 6: Reshape the interpolated values back into the polar grid shape
+    efth = polar_values.reshape(K.shape).T[:,0:nth]
+
+  
+    [nf,nt]=np.shape(efth)
+    Ef=np.sum(efth,             axis=1)*dth
+    Etot=np.sum(Ef[:]*df)
+    eftn=0.5*(efth+np.roll(efth,nt//2,axis=1))
+
+    a1=np.zeros(nf)
+    b1=np.zeros(nf)
+    m1=np.zeros(nf)
+    Q1=np.zeros(nf)
+    Q2=0
+  #  print('TEST:',np.shape(dirn),np.shape(efth),dirn,dth)
+    for ind in range(nf):
+       #Ef[ind]=np.sum(efth[ind,:]                    )*dth
+       a1[ind]=np.sum(efth[ind,:]*np.cos(theta[0:nth]*d2r))*dth/Ef[ind]
+       b1[ind]=np.sum(efth[ind,:]*np.sin(theta[0:nth]*d2r))*dth/Ef[ind]
+       m1[ind]=np.sqrt(a1[ind]**2+b1[ind]**2)
+       Q1[ind]=np.sum(eftn[ind,0:nth]**2)*dth
+       Q2=Q2+Q1[ind]*dfreq[ind]*grav**2/(2*((np.pi*2)**4*fren[ind]**3 ))
+    #   print('ft:',ind,fren[ind],wn[ind],'Cg:',Cg[ind],dfreq[ind]/(wn[ind]*dk[ind]),grav**2/(2*((np.pi*2)**4*fren[ind]**3 )) )
+    Qkk=np.sqrt(Q2)/Etot
+    Qf=np.sqrt(np.sum(Ef**2*dfreq))/Etot
+
+    Tm0m1=np.sum(Ef*dfreq/fren)/Etot
+    Em2=np.sum(Ef*dfreq*fren**2)+Ef[-1]*dfreq[-1]*0.5*fren[-1]**3  # integral including f^-5 tail 
+    Tm02=np.sqrt(Etot/Em2)
+    Hs=4*np.sqrt(Etot) 
+  #     print('WHAT:',ind,fren[ind],Ef[ind],a1[ind],b1[ind],m1[ind],efth[ind,:])
+    th1m=np.arctan2(b1,a1)/d2r
+  #  print('TEST:',nf,nt,m1,'##',np.sum(efth[5,:]*np.cos(dirn))*dth/Ef[5],a1[5],b1[5],m1[5])
+    sth1m=np.sqrt(np.abs(2.0*(1-m1)))/d2r
+
+# Checking total energy: 
+    Etot=np.sum(efth)*df*dth
+    E_mask=np.where( k2 < km[-1], Ekxky, 0) 
+    
+    
+    dkx=kx[1]-kx[0]
+    dky=ky[1]-ky[0]
+    Etotxy=np.sum(Ekxky*dkx*dky)
+    Etotm=np.sum(E_mask*dkx*dky)
+    
+    print('H:',4*np.sqrt(Etot),4*np.sqrt(Etotxy),4*np.sqrt(Etotm))
+    
+    return efth,fren,theta[0:nth],Ef,th1m,sth1m
+
 
 #############################################################################
 def  wavespec_Efth_to_Uss(efth,fren,dfreq,dirn,dth)  :
@@ -598,7 +696,7 @@ def spectrum_k_to_f(Ek,k,D=None):
     Ef = np.swapaxes(Ek/np.broadcast_to(dfdk,shEk2),-1,ind0)
     return Ef, f
     
-'''
+#############################################################################
 def PM_spectrum_k(k,fm,g=9.81):
     pmofk(k,T0,H)
     alpha=8.1*10**-3
@@ -610,4 +708,5 @@ def PM_spectrum_k(k,fm,g=9.81):
     
     E = alpha*g**2*(2*np.pi)**-4*f**-5*np.exp((-5/4)*((fm/f)**4))
     return E
-'''
+#############################################################################
+
