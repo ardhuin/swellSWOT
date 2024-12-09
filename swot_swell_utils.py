@@ -523,15 +523,17 @@ def draw_mask(axsfig,kx2,dkx,ky2,dky,vertices,color='k',lw=3):
 
 
 #######################" Plotting routines ########################
-def arrows_on_spectrum(axsfig,flip,trackangle,color='k',lw=3,fs1=20):
-    arx0=0;ary0=0;arxd=0.5;aryd=0.5;arwid=1;gr=[0.,1,0.]
-    sflip=-1+2*(1-flip)
-    axsfig.arrow(arx0, ary0, arxd*np.sflip*np.sin(trackangle*np.pi/180), -sflip*aryd*np.cos(trackangle*np.pi/180), linewidth=4,color='k',head_width=arwid) 
-    axsfig.text(arx0+arxd*1.4*sflip*np.sin(trackangle*np.pi/180),ary0-sflip*aryd*1.4*np.cos(trackangle*np.pi/180),'N',fontsize=fs1)
-    axsfig.arrow(arx0, ary0, 0., 5*sflip, linewidth=4,color=gr,head_width=arwid) 
-    axsfig.text(arx0+0.4*arxd,ary0+aryd*1.2*sflip,'Vsat',fontsize=fs1,color=gr)
-    axsfig.arrow(arx0, ary0 ,  arxd*Look, 0, linewidth=4,color=gr,head_width=arwid) 
-    axsfig.text(arx0+arxd*(1.5*Look-0.5),ary0-2,'Look',fontsize=fs1,color=gr)
+def arrows_on_spectrum(axsfig,sflip,side,trackangle,color='k',lw=3,fs1=20):
+    arx0=0;ary0=0;arxd=0.2;aryd=0.2;arwid=0.1;gr=[0.,1,0.]
+    flip=-1+2*(1-sflip)
+    sidf=1-2*(1-side)
+    print('flip:',sflip,flip,'side ind:',sidf)
+    axsfig.arrow(arx0, ary0, -arxd*np.sin(trackangle*np.pi/180), aryd*np.cos(trackangle*np.pi/180), linewidth=4,color='k',head_width=arwid) 
+    axsfig.text(arx0-arxd*1.6*np.sin(trackangle*np.pi/180),ary0+aryd*1.6*np.cos(trackangle*np.pi/180),'N',fontsize=fs1)
+    axsfig.arrow(arx0, ary0, 0., aryd*flip, linewidth=4,color=gr,head_width=arwid) 
+    axsfig.text(arx0+0.4*arxd,ary0+aryd*1.2*flip,'Vsat',fontsize=fs1,color=gr)
+    axsfig.arrow(arx0, ary0 ,  arxd*sidf*flip, 0, linewidth=4,color=gr,head_width=arwid) 
+    axsfig.text(arx0+arxd*(1.8*sidf*flip-0.8),ary0-aryd,'Look',fontsize=fs1,color=gr)
 
 #######################" Plotting routines ########################
 
