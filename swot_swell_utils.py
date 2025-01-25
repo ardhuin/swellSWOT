@@ -36,7 +36,7 @@ from netCDF4 import Dataset
 def spec_settings_for_L3(nres,version):
     dx=250
     dy=235
-    indxc=259
+    indxc=259   # index of center pixel (at nadir) 
     ISHIFT=30   # start of 40 km box for spectral analysis, in pixels, relative to track center
     nkxr=20
     nkyr=21
@@ -148,20 +148,24 @@ def  SWOTspec_to_HsLm(Ekxky,kx2,ky2,swell_mask,Hhat2,trackangle)  :
         Q18=np.sqrt(mQ/(m0**2*dkx*dky))/(2*np.pi)
         inds=np.where(kn.flatten() > 5E-4)[0]
         mm1=np.sum(E_mask.flatten()[inds]/kn.flatten()[inds])
+        mmE=np.sum(E_mask.flatten()[inds]/np.sqrt(kn.flatten()[inds]))
         mp1=np.sum(np.multiply(E_mask,kn).flatten())
-        Lmp1_SWOT=m0/mp1
         Lmm1_SWOT=mm1/m0
+        LE_SWOT  =(mmE/m0)**2
+        Lmp1_SWOT=m0/mp1
 
 # Corrects for 180 shift in direction
         shift180=0
         if np.abs(trackangle) > 90: 
           shift180=180
-        cosm_SWOT=np.mean(np.multiply(kx2,E_mask).flatten())
-        sinm_SWOT=np.mean(np.multiply(ky2,E_mask).flatten())
-        dm_SWOT=np.mod(90-(-trackangle+shift180+np.arctan2(sinm_SWOT,cosm_SWOT)*180/np.pi),360) # converted to direction from, nautical
+        
+        a1=np.sum(np.multiply(kx2/kn,E_mask).flatten()[inds])/m0
+        b1=np.sum(np.multiply(ky2/kn,E_mask).flatten()[inds])/m0
+        sigth_SWOT=np.sqrt(2*(1-np.sqrt(a1**2+b1**2)))*180/np.pi
+        dm_SWOT=np.mod(90-(-trackangle+shift180+np.arctan2(b1,a1)*180/np.pi),360) # converted to direction from, nautical
     else :
         Hs_SWOT=NaN,Lmm1_SWOT=NaN,Lmp1_SWOT=NaN,dm_SWOT=NaN
-    return Hs_SWOT,Lmm1_SWOT,Lmp1_SWOT,dm_SWOT,Q18
+    return Hs_SWOT,Lmm1_SWOT,LE_SWOT,Lmp1_SWOT,dm_SWOT,sigth_SWOT,Q18
 
 
 ###################################################################
