@@ -97,8 +97,12 @@ def  wavespec_Efth_to_first3(efth,fren,dfreq,dirn,dth,cut=1E4)  :
   #  print('TEST:',np.shape(dirn),np.shape(efth),dirn,dth)
     for ind in range(nf):
        #Ef[ind]=np.sum(efth[ind,:]                    )*dth
-       a1[ind]=np.sum(efth[ind,:]*np.cos(dirn[:]*d2r))*dth/Ef[ind]
-       b1[ind]=np.sum(efth[ind,:]*np.sin(dirn[:]*d2r))*dth/Ef[ind]
+       if Ef[ind] > 1E-8:
+          a1[ind]=np.sum(efth[ind,:]*np.cos(dirn[:]*d2r))*dth/Ef[ind]
+          b1[ind]=np.sum(efth[ind,:]*np.sin(dirn[:]*d2r))*dth/Ef[ind]
+       else:
+          a1[ind]=0.
+          b1[ind]=0.
        m1[ind]=np.sqrt(a1[ind]**2+b1[ind]**2)
        Q1[ind]=np.sum(eftn[ind,:]**2)*dth
        Q2=Q2+Q1[ind]*dfreq[ind]*grav**2/(2*((np.pi*2)**4*fren[ind]**3 ))
@@ -421,7 +425,7 @@ def period_from_wvl(wvl,D=None):
     T = period_from_sig(sig)
     return T
 
-def k_from_f(f,D=10000.,g=9.81):
+def k_from_f(f,D=1000.,g=9.81):
     # inverts the linear dispersion relation (2*pi*f)^2=g*k*tanh(k*dep) to get 
     #k from f and dep. 2 Arguments: f and dep. 
     eps=0.000001
