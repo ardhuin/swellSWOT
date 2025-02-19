@@ -1533,14 +1533,28 @@ def dist_sphere(lo1,lo2,la1,la2):
     return alpha,beta1 #,beta2    
     
 ###################################################################
-def SWOTdefine_swell_mask_storm(kx2,ky2,trackangle,lo1,la1,lo2,la2,tds,tola=6E5,thrcos=0.97):
+def SWOTdefine_swell_mask_storm(kx2,ky2,trackangle,lo1,la1,lo2,la2,tds,tola=2E6,tolr=0.25,thrcos=0.97,distshift=0,timeshift=0):
+    '''
+    Define mask based on storm position 
+    inputs :
+            - lo1,la1 : storm longitude and latitude 
+            - lo2,la2 : observation longitude and lat. 
+            - tola: tolerance on distance (in meters: 2E6 is 2000 km) 
+            - tolr: relative tolerance on distance 
+            - thrcos: threshold for cosine of direction (equivalent to a tolerance in angles) 
+            - distshift : shift in anglular distance (radians) 
+            - timeshift : shift in time (days)  
+            
+    output : amask; bmask. bmask is dilated compared to amask. 
+    '''
     alpha,beta=dist_sphere(lo2,lo1,la2,la1)
+    alpha=alpha+distshift
     dtor=np.pi/180
     dalpha=alpha*4E7/(2*np.pi)
-    Cgt=dalpha/tds
+    Cgt=dalpha/(tds+timeshift*86400)
     kt=9.81/(2*Cgt)**2/(2*np.pi)
-    kt2=kt*dalpha/(dalpha-tola)
-    kt1=kt*dalpha/(dalpha+tola)
+    kt2=kt*np.max([dalpha/(dalpha-tola),1+tolr])
+    kt1=kt*np.min([dalpha/(dalpha+tola),1-tolr])
 
     kn=np.sqrt(kx2**2+ky2**2)
     km=np.where((kn <kt2) & (kn > kt1),1,0)
@@ -1558,7 +1572,9 @@ def  Lmodel_eval(xdata,tds,incognita)  :
     Define wavelengths model
     inputs :
             - xdata : distances 
-            - incognita : (2,) vector with [0] = distance shift, [1] = time shift
+            - incognita : (2,) vector with 
+                                [0] = distance shift (in radians, multiply by RE for distance),  
+                                [1] = time shift (in days)
             
     output : - wavelengths
     '''
