@@ -994,9 +994,21 @@ def  SWOT_write_L3_CNES_Light(SL3_nc,ibox,step,indside,indx,indy,indres,sres,kx2
      
      
 ###################################################################
-def  SWOT_spectra_for_one_L3track(cycle,tracks,mask_choice,number_res,spectra_res,vtag,pth_swot,\
-                                pth_WW3_trck,pth_spectra,pth_plots,modelOK=0,modeltag='',latmax=91,latmin=-91, \
+def  SWOT_spectra_for_one_track(cycle,tracks,mask_choice,number_res,spectra_res,vtag,pth_swot,\
+                                pth_WW3_trck,pth_spectra,pth_plots,level='L3',modelOK=0,modeltag='',latmax=91,latmin=-91, \
                                 fs1=20,dBE=25,dBE2=25,addglobcur=0,doplot=0)  :
+
+  '''
+  Computes spectra from SWOT SSH and sigma0 fields 
+  inputs :
+            - cycle  : SWOT cycle (001 at start of 21-day orbit ... 
+            - tracks : SWOT track number (001 to 580 for the 21-day repeat orbits) 
+            - level  : uses L2 or L3 as input (note that the data structures are slightly different) 
+                       also the sigma0 in L2 is in dB but in linear units for L3
+  output : 
+            - file 
+
+  '''
 
   cohthr=0.3
   flagssha=1E10;
@@ -1006,13 +1018,18 @@ def  SWOT_spectra_for_one_L3track(cycle,tracks,mask_choice,number_res,spectra_re
   else: 
       td='descending'
   ncout=''
-  # Searches for L3 file ... 
-  file_list = glob.glob(pth_swot+'SWOT_L3_LR_SSH_*Unsmoothed_'+cycle+'_'+tracks+'*.nc')
+  # Searches for L2/L3 file ... 
+  if (level=='L3'): 
+      filepattern=pth_swot+'SWOT_L3_LR_SSH_*Unsmoothed_'+cycle+'_'+tracks+'*.nc'
+  else: 
+      filepattern=pth_swot+'SWOT_L2_LR_SSH_*Unsmoothed_'+cycle+'_'+tracks+'*.nc' 
+
+  file_list = glob.glob(filepattern)
   if (len(file_list) > 0) : 
     file_swot=file_list[0]
     tags=file_swot.split(sep='/')
     filenopath=tags[-1]
-    ncout=pth_spectra+'SWOT_L3_LR_WIND_WAVE_'+filenopath[26:65]+'_v'+vtag+'.nc' 
+    ncout=pth_spectra+'SWOT_'+level+'_LR_WIND_WAVE_'+filenopath[26:65]+'_v'+vtag+'.nc' 
     
     if os.path.exists(ncout):
        print('output file already exists:',ncout)
@@ -1020,9 +1037,33 @@ def  SWOT_spectra_for_one_L3track(cycle,tracks,mask_choice,number_res,spectra_re
   if (len(file_list) > 0) and (not  os.path.exists(ncout)) : 
     days=filenopath[34:len(filenopath)]
     print('Reading file:',file_swot,'##',days)
-    ddla = xr.open_dataset(file_swot)
-    #print(ddla)
+    if (level=='L3'): 
+          ddla = xr.open_dataset(file_swot)
+          ssh_varname= 'ssha_unedited'
+          qual_varname='quality_flag'
+          sig0_varname='sigma0'
+          temp=ddla.sigma0.values
+          ddla['sigma0'][:,:]=10*np.log10(temp)
 
+    else:
+        ddll = xr.open_dataset(file_swot, group='left') # 82941 , 240
+        ddlr = xr.open_dataset(file_swot, group='right') # 82941 , 240
+
+        varlis1=['ssh_karin_2','sig0_karin_2','ssh_karin_2_qual','latitude','longitude','time'] 
+        varlist=['ssh_karin_2','sig0_karin_2','ssh_karin_2_qual','latitude','longitude'] 
+        ddla = ddlr[varlis1].copy().pad(num_pixels=(279,0))  # Make a copy of the original ddll to avoid modifying it in place
+
+        for thisvar in varlist :
+            ddla[thisvar][:, 0:240] = np.flip(ddll[thisvar].values, axis=1) 
+
+        ssh_varname= 'ssh_karin_2'
+        qual_varname='ssh_karin_2_qual'
+        sig0_varname='sig0_karin_2'
+
+        
+  #flas = ddl.sig0_karin_2_qual
+
+      
     # This opens the WAVEWATCH III spectra file (computed for B. Molero).
     filetr=pth_WW3_trck+'SWOT_WW3-GLOB-30M_'+days[0:6]+'_trck.nc'
     print('file for model:',filetr) 
@@ -1087,6 +1128,7 @@ def  SWOT_spectra_for_one_L3track(cycle,tracks,mask_choice,number_res,spectra_re
     
     shifty=ind00
     indsubs=np.arange(ind00,ind99,dind)
+    
     nind=len(indsubs)
     print('creating NetCDF file:',ncout)
     SL3_nc=SWOT_create_L3_CNES_Light(ncout,modelOK,restab,nX2tab*2//mtab,nY2tab*2//ntab,nind,2,modf=modf,moddf=moddf,modang=modang)
@@ -1105,11 +1147,11 @@ def  SWOT_spectra_for_one_L3track(cycle,tracks,mask_choice,number_res,spectra_re
        ddl = xr.Dataset(subset_vars, attrs=ddla.attrs)
 
 # gets data from SWOT L3 SSH file 
-       ssha = ddl.ssha_unedited
-       flag = ddl.quality_flag  # L2 : .ssh_karin_2_qual
+       ssha = ddl[ssh_varname]
+       flag = ddl[qual_varname]
        ssha = np.where(flag < flagssha, ssha, np.nan)
-       sig0 = ddl.sigma0 #sig0_karin_2
-       flas = ddl.quality_flag # sig0_karin_2_qual
+       sig0 = ddl[sig0_varname] #sig0_karin_2
+       flas = ddl[qual_varname] # sig0_karin_2_qual
        lon = ddl.longitude.values
        lat = ddl.latitude.values
        [nline,npix]=np.shape(ssha)
@@ -1167,8 +1209,11 @@ def  SWOT_spectra_for_one_L3track(cycle,tracks,mask_choice,number_res,spectra_re
              j1=0 #nline//2-nY2*(nindy-indy) #10   # centers box on target latitude
              j2=j1+nY2*2
              latc=ddl.latitude[j1+nY2,i1+nX2].values    # WILL HAVE TO CHANGE THIS ... 
-             latcr=np.round(latc*2)/2; latcs=f'{abs(latc):3.2f}'+hemiNS[int(np.sign(latc))]
              lonc=lon[j1+nY2,i1+nX2]; 
+             if ~np.isfinite(latc):  # this was a problem for some L2 files ... 
+                   latc=0 #np.nanmedian(ddl.latitude[j1:j1+nY2*2,i1+nX2].values)
+                   lonc=0 #np.nanmedian(lon[j1:j1+nY2*2,i1+nX2])
+             latcr=np.round(latc*2)/2; latcs=f'{abs(latc):3.2f}'+hemiNS[int(np.sign(latc))]
              loncr=np.round(lonc*2)/2; loncs=f'{abs(lonc):3.2f}'+hemiWE[int(np.sign(lonc))]
              lat_bounds=[-0.5+float(latc), 0.5+float(latc)];
              lonlat=latcs+loncs
@@ -1181,8 +1226,7 @@ def  SWOT_spectra_for_one_L3track(cycle,tracks,mask_choice,number_res,spectra_re
              Xmem=X;
              Ymem=Y;
 # NB: with L3 data we do not need the cross-track flip, thus side is forced to "right"
-# Later version will remove the flip. 
-# NB: L3 sigma0 uses LINEAR units ... not dB !!
+
              mybox,mybos,flbox,X,Y,sflip,signMTF,Look=SWOTarray_flip_north_up(dlat, \
                                                          'right',ssha[j1:j2,i1:i2],flas[j1:j2,i1:i2],sig0[j1:j2,i1:i2],Xmem,Ymem)
 
@@ -1199,7 +1243,7 @@ def  SWOT_spectra_for_one_L3track(cycle,tracks,mask_choice,number_res,spectra_re
              #print('BAD:',fracbad,fracfla)  
     # Computes spectrum from SWOT SSH data
     # Note: this uses tiles: we may use these higher resolution estimates to avoid duplication 
-             (Eta,Etb,ang,angstd,coh,crosr,phases,ky2,kx2,dky,dkx,detrenda,detrendb,nspec)=FFT2D_two_arrays_nm_detrend_flag(mybox,mybos,flbox, \
+             (Eta,Etb,ang,angstd,coh,crosr,phases,ky2,kx2,dky,dkx,detrenda,detrendb,nspec)=FFT2D_two_arrays_nm_detrend_flag(mybox,10**(0.1*mybos),flbox, \
                                                                                                      dy,dx,n,m,detrend='quadratic') 
 
          
@@ -1426,7 +1470,6 @@ def  SWOT_spectra_for_one_L3track(cycle,tracks,mask_choice,number_res,spectra_re
   else: 
     file_swot=''
   return file_swot
-
 
 ###################################################################
 def  SWOT_denoise_isotropic(Ekxky,kx2,ky2,ndir=0,verbose=0)  :
