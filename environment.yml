@@ -22,9 +22,9 @@ dependencies:
   - brotli-python=1.0.9=py39h6a678d5_8
   - bzip2=1.0.8=h5eee18b_6
   - c-ares=1.19.1=h5eee18b_0
-  - ca-certificates=2024.3.11=h06a4308_0
+  - ca-certificates=2025.2.25=h06a4308_0
   - cartopy=0.22.0=py39h1128e8f_0
-  - certifi=2024.6.2=py39h06a4308_0
+  - certifi=2025.1.31=py39h06a4308_0
   - cffi=1.16.0=py39h5eee18b_1
   - cftime=1.6.2=py39h7deecbd_0
   - charset-normalizer=2.0.4=pyhd3eb1b0_0
@@ -94,6 +94,7 @@ dependencies:
   - libev=4.33=h7f8727e_1
   - libffi=3.4.4=h6a678d5_1
   - libgcc-ng=11.2.0=h1234567_1
+  - libgfortran=3.0.0=1
   - libgfortran-ng=11.2.0=h00389a5_1
   - libgfortran5=11.2.0=h1234567_1
   - libglib=2.78.4=hdc74915_0
@@ -133,8 +134,9 @@ dependencies:
   - numexpr=2.8.7=py39h286c3b5_0
   - numpy=1.26.4=py39heeff2f4_0
   - numpy-base=1.26.4=py39h8a23956_0
+  - openblas=0.3.4=ha44fe06_0
   - openjpeg=2.4.0=h9ca470c_1
-  - openssl=3.0.14=h5eee18b_0
+  - openssl=3.0.16=h5eee18b_0
   - overrides=7.4.0=py39h06a4308_0
   - packaging=24.1=py39h06a4308_0
   - pandas=2.2.2=py39h6a678d5_0

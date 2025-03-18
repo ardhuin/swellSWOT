@@ -1643,6 +1643,30 @@ def  Lmodel(incognita,data)  :
     return cy
 
 ###############################################
+def  Hmodel_r_eval(xdata,fj,gammaPM,incognita)  :
+    '''
+    Define swell heights model
+    inputs :
+            - xdata : distances 
+            - incognita : (2,) vector with [0] = peak frequency, [1] = storm radius (in meters)
+            
+    output : - wavelengths
+    '''
+    fp=incognita[0]
+    pow=17
+    RE=4E7/(2*np.pi)
+    alphaP=0.0081*9.81**2/(2*np.pi)**4
+    tac=5
+    gamma=0 # energy dissipation ... 
+    facPM=np.where(fj > fp,np.exp(-1.25*(fj/fp)**-4),np.exp(-1.25)*(fj/fp)**(5+pow*np.tanh(tac*(fp-fj)/fp)))
+    #gammaPM=2 #incognita[2] #1.1
+    H=4*np.sqrt(incognita[1]**2 *fj *alphaP* fj**-5*facPM*gammaPM**(np.exp(-(fj-fp)**2/(2*(0.07*fp)**2))- gamma*xdata ))\
+                                                      /np.sqrt(2*xdata*np.sin(xdata))/RE
+    return H
+
+
+
+
 def  Hmodel_eval(xdata,fj,gammaPM,incognita)  :
     '''
     Define swell heights model
@@ -1658,7 +1682,9 @@ def  Hmodel_eval(xdata,fj,gammaPM,incognita)  :
     gamma=0 # energy dissipation ... 
     facPM=np.where(fj > fp,np.exp(-1.25*(fj/fp)**-4),np.exp(-1.25)*(fj/fp)**(5+pow*np.tanh(tac*(fp-fj)/fp)))
     #gammaPM=2 #incognita[2] #1.1
-    H=incognita[1]*np.sqrt(fj**-5*facPM*gammaPM**(np.exp(-(fj-fp)**2/(2*(0.07*fp)**2))- gamma*xdata ))\
+# there was a bug here: corrected missing fj factor ... 
+#    H=incognita[1]*np.sqrt(fj**-5*facPM*gammaPM**(np.exp(-(fj-fp)**2/(2*(0.07*fp)**2))- gamma*xdata ))\
+    H=incognita[1]*np.sqrt(fj* fj**-5*facPM*gammaPM**(np.exp(-(fj-fp)**2/(2*(0.07*fp)**2))- gamma*xdata ))\
                                                       /np.sqrt(xdata*np.sin(xdata))
     return H
 
