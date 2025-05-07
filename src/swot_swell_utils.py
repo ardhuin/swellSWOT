@@ -63,6 +63,10 @@ def spec_settings_for_L3(nres,version):
        samemask=0
        mtab=np.array([8,2,1])
        ntab=np.array([8,2,1])
+    if (version == '20km'):
+       samemask=0
+       mtab=np.array([2,2,2])
+       ntab=np.array([2,2,2])
     
     
     indl=421 # alongtrack length of "chunk" of SWOT data being processed: this relatively big number is there because of the movies to get context.
@@ -408,7 +412,8 @@ def SWOTdefine_swell_mask_simple(Eta,coh,ang,medsig0,dlat,kx2,ky2,cohthr=0.3,cfa
 
     bmask=ndimage.binary_dilation((amask > 0.5).astype(int))
 
-    print('Swell mask option:',maskset,cohOK,mask_choice,cohthr,cohmax,ncoh,medsig0)
+    if verbose > 0:
+       print('Swell mask option:',maskset,cohOK,mask_choice,cohthr,cohmax,ncoh,medsig0)
 
     return amask,bmask
 

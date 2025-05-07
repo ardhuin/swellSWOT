@@ -18,6 +18,10 @@ compare model and SWOT data.
 use the notebook swot_compute_spectra_light_multi_tracks.ipynb
 Note that this produces very similar files ... but not exactly the same. More later here about differences. 
 
+### basic plotting of SWOT spectra (and SSH map if you have it)
+- plot_one_spectrum.ipynb : this notebook just plots rone spectrum 
+- L3_fit_one_track_LandH.ipynb : plots parameters for an entire track but also includes 
+an interactive plot of single spectra (using a widget slider)  
 
 For some of the other notebooks, you may need to download these data sets: 
 
