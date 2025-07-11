@@ -19,9 +19,12 @@ use the notebook swot_compute_spectra_light_multi_tracks.ipynb
 Note that this produces very similar files ... but not exactly the same. More later here about differences. 
 
 ### basic plotting of SWOT spectra (and SSH map if you have it)
-- plot_one_spectrum.ipynb : this notebook just plots rone spectrum 
+- plot_one_spectrum.ipynb : this notebook just plots one spectrum 
 - L3_fit_one_track_LandH.ipynb : plots parameters for an entire track but also includes 
 an interactive plot of single spectra (using a widget slider)  
+
+### spectral partitionning using watershed method
+- plot_watershed.ipynb : this works with version 2 of the CNES L3 product, but also with version 2.1_light (with X-spectra phase included): here are examples here [https://drive.google.com/drive/folders/1Eu_KRgLw6uHMKNFgUUJ6n6w5gY_CMNVB?usp=drive_link](https://drive.google.com/drive/folders/1SSUNcgist3ZEP2cJi6p_AKEkf426LwFM?usp=drive_link)
 
 For some of the other notebooks, you may need to download these data sets: 
 
