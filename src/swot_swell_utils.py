@@ -183,10 +183,76 @@ def  SWOTspec_to_HsLm(Ekxky,kx2,ky2,swell_mask,Hhat2,trackangle)  :
         sigth=np.sqrt(2*(1-np.sqrt(a1**2+b1**2)))*180/np.pi
         dm=np.mod(90-(-trackangle+shift180+np.arctan2(b1,a1)*180/np.pi),360) # converted to direction from, nautical
     else :
-        Hs=np.nan,Lmm1=np.nan,Lmp1=np.nan,LE=np.nan,dm=np.nan,sigth=np.nan,Q18=np.nan
+        Hs=np.nan;Lmm1=np.nan;Lmp1=np.nan;LE=np.nan;dm=np.nan;sigth=np.nan;Q18=np.nan
     return Hs,Lmm1,LE,Lmp1,dm,sigth,Q18
 
 
+
+###################################################################
+def  SWOTspec_to_HsLm_new(Ekxky,kx2,ky2,swell_mask,Hhat2,trackangle)  :
+    '''
+    Computes parameters from SWOT ssh spectrum. Updated 2025/07/10 for multiple partitions 
+    inputs :
+            - Ekxky     : spectrum
+            - kx2,ky2   : 2D array of wavenumbers
+            - swell_mask:  mask for selected area of spectrum (do not have to be binary) 
+	    - Hhat2     : squared FT of the filtering function 
+            - trackangle: direction of satellite track: used to shift directions back to nautical convention  
+    output : 
+            - Hs     : significant wave height or swell partition wave height(s)
+
+    '''
+    nmask=np.sum(swell_mask.astype(int).flatten())
+    npart=np.max(swell_mask.astype(int).flatten())
+    Hs=np.zeros(npart)
+    Lmm1=np.zeros(npart)
+    LE=np.zeros(npart)
+    Lmp1=np.zeros(npart)
+    dm=np.zeros(npart)
+    sigth=np.zeros(npart)
+    Q18=np.zeros(npart)
+        
+    if nmask > 0:
+        dkx=kx2[0,1]-kx2[0,0]
+        dky=ky2[1,0]-ky2[0,0]
+        #E1D=(np.divide(Ekxky,Hhat2)).flatten()
+        # Corrects for 180 shift in direction
+        shift180=0
+        if np.abs(trackangle) > 90: 
+            shift180=180
+        
+        for ipart in range(npart):
+            E_mask=np.where( swell_mask == ipart+1, np.divide(Ekxky,Hhat2),0) 
+            varmask=np.sum(E_mask.flatten())*dkx*dky*2;  # WARNING: factor 2  corrects for double sided spectrum
+            Hs[ipart]=4*np.sqrt(varmask)
+
+
+            kn=np.sqrt(kx2**2+ky2**2)
+            m0=np.sum(E_mask.flatten())
+            mQ=np.sum((E_mask.flatten())**2)
+            Q18=np.sqrt(mQ/(m0**2*dkx*dky))/(2*np.pi)
+            inds=np.where(kn.flatten() > 5E-4)[0]
+            mm1=np.sum(E_mask.flatten()[inds]/kn.flatten()[inds])
+            mmE=np.sum(E_mask.flatten()[inds]/np.sqrt(kn.flatten()[inds]))
+            mp1=np.sum(np.multiply(E_mask,kn).flatten())
+            if m0 > 1E-6:
+                Lmm1=mm1/m0
+                LE  =(mmE/m0)**2
+                Lmp1=m0/mp1
+                a1=np.sum(np.multiply(kx2.flatten()[inds]/kn.flatten()[inds],E_mask.flatten()[inds]))/m0
+                b1=np.sum(np.multiply(ky2.flatten()[inds]/kn.flatten()[inds],E_mask.flatten()[inds]))/m0
+            else:
+                Lmm1=0.
+                LE=0.
+                Lmp1=0.
+                a1=0.
+                b1=0.		           
+            sigth[ipart]=np.sqrt(2*(1-np.sqrt(a1**2+b1**2)))*180/np.pi
+            dm[ipart]=np.mod(90-(-trackangle+shift180+np.arctan2(b1,a1)*180/np.pi),360) # converted to direction from, nautical
+    else :
+        Hs=np.nan;Lmm1=np.nan;Lmp1=np.nan;LE=np.nan;dm=np.nan;sigth=np.nan;Q18=np.nan
+    return Hs,Lmm1,LE,Lmp1,dm,sigth,Q18
+    
 ###################################################################
 def  SWOTspec_mask_polygon(amask)  :
     '''
@@ -1613,8 +1679,197 @@ def SWOTdefine_swell_mask_storm(kx2,ky2,trackangle,lo1,la1,lo2,la2,tds,tola=2E6,
     bmask=ndimage.binary_dilation((amask > 0.5).astype(int))
 
     return amask,bmask
+
+###################################################################
+def SWOT_partitions_watershed(kx2,ky2,trackangle,E_SWOT,phase,E_SWOT_nonoise,kmin=0.48,kmax=2):
+    '''
+    Computes partitions using watershed method
+    inputs :
+            - kx2,ky2    : wavenumbers
+            - E_SWOT     : spectrum
+            - tola: tolerance on distance (in meters: 2E6 is 2000 km) 
+            - tolr: relative tolerance on distance 
+            - thrcos: threshold for cosine of direction (equivalent to a tolerance in angles) 
+            - distshift : shift in anglular distance (radians) 
+            - timeshift : shift in time (days)  
+            
+    output : 
+            - pmask : mask of partitions (0: not in partition, 1: first partition ...) 
+            - 
+    '''
+
+    from scipy import ndimage as ndi
+    from skimage.segmentation import watershed
+    from skimage.feature import peak_local_max
+    # Generate an initial mask (2 circles) 
+    r1, r2 = kmin, kmax
+    mask_circle1 = (kx2*1000) ** 2 + (ky2*1000) ** 2 > r1**2
+    mask_circle2 = (kx2*1000) ** 2 + (ky2*1000) ** 2 < r2**2
+
+    image = mask_circle1 #np.logical_and(mask_circle1, mask_circle2)
+    [ny,nx]=np.shape(image)
+    if (np.mod(nx,2)==0):
+        if (abs(kx2[0,0]) > abs(kx2[0,-1])):
+            image[:,0]=0 # for symmetry 
+        else:
+            image[:,-1]=0 # for symmetry 
+
+    # finds local peaks
+    coords = peak_local_max(E_SWOT.values, footprint=np.ones((3,3)), labels=image)
+    npeaks=np.shape(coords)[0]
+
+    mask = np.zeros(E_SWOT.shape, dtype=bool)
+    mask[tuple(coords.T)] = True
+    markers, _ = ndi.label(mask)
+    labels = watershed(-E_SWOT, markers, mask=image)
+
+    signreal=np.cos(phase.values*np.pi/180)*np.sign(ky2)*np.sign(np.cos(trackangle*np.pi/180))
+    partflag=np.zeros(npeaks)
     
-    ######################  Defines L,H parametric models based on updated JONSWAP shape + propagation 
+    npeak2=npeaks
+    coord2=coords.copy()
+    original_shape = labels.shape 
+
+    E_SWOTv=E_SWOT.values.reshape(-1)
+    E_SWOTn=E_SWOT_nonoise.reshape(-1)
+    sign1=signreal.reshape(-1)    
+
+    
+    # re-orders the coordinates of local maxima
+    for ipeak in range(npeaks - 1, -1, -1):
+        ilab=markers[coords[ipeak,0],coords[ipeak,1]]
+        coord2[ilab-1,:]=coords[ipeak,:]
+
+    coords=coord2.copy()
+    coord2=coords.copy()
+
+    label2=labels.copy()
+
+    # defines 1D arrays
+    label1=labels.reshape(-1)
+    ky1=ky2.reshape(-1)
+
+    for ipeak in range(npeaks - 1, -1, -1):
+        remove=0
+        amb=signreal[coords[ipeak,0],coords[ipeak,1]]
+        ilab=markers[coords[ipeak,0],coords[ipeak,1]] #labels[coords[ipeak,0],coords[ipeak,1]]
+        ind1=np.where(label1==ipeak+1)[0]
+
+    #print('label OK:',ilab,amb,len(ind1),mask_circle2[coords[ipeak,0],coords[ipeak,1]])
+        if (abs(amb) <= 0.1):
+            partflag[ipeak]=3
+            ambavg=np.sum(sign1[ind1]*E_SWOTn[ind1])/np.sum(E_SWOTn[ind1])
+            if (abs(ambavg) > 0.1):
+               amb=ambavg
+# first set of criteria: ambiguity removal, L > Lmin & size of partition 
+        if (amb > 0.1) & (mask_circle2[coords[ipeak,0],coords[ipeak,1]] ==1) & (len(ind1) > 3):
+            E_max=E_SWOT.values[coords[ipeak,0],coords[ipeak,1]]
+        
+            fac=0.1
+            if (E_max > 3000): 
+                fac=0.01
+            thr=max([E_max * fac,10])+20*(ky1*1000.)**2
+            ind = np.where((label1 == ipeak + 1) & ((E_SWOTn < thr) | (E_SWOTn < 20)) )[0]
+            if (len(ind) > 0):
+                label1[ind]=0
+            partflag[ipeak]=1
+            ind1=np.where(label1==ipeak+1)[0]
+            if (len(ind1)==0) | (len(ind1) <= 3):
+                remove=1
+# second set of criteria: single sign of ambiguity (check coherence also ?)
+            indp=np.where((label1==ipeak+1) & (sign1 > 0) )[0]
+            indm=np.where((label1==ipeak+1) & (sign1 < 0) )[0]
+            if len(indm > 0): 
+                ratio=np.sum(E_SWOTv[indp])/np.sum(E_SWOTv[indm]) 
+                #print('ratio:',ratio)
+                if (ratio < 2): 
+                    remove=1
+        else:
+            remove=1
+# removes selected partitions 
+        if (remove==1):
+            label1[ind1]=0
+        # shift indices after removal of partition 
+            ind=np.where(label1>ipeak+1)[0]
+            if len(ind) > 0:
+                label1[ind]=label1[ind]-1
+            coord2[ipeak:npeak2-1,:]=coord2[ipeak+1:npeak2,:]
+            partflag[ipeak:npeak2-1]=partflag[ipeak+1:npeak2]
+            npeak2=npeak2-1
+            #print('removing label:',ipeak+1,npeak2,len(ind1),coords[ipeak,:])
+            
+        
+    pmask=label1.reshape(original_shape)
+
+    return pmask,npeak2,coord2[0:npeak2],image,labels,coords,signreal
+    
+##################################################################
+def  SWOTspec_to_HsLE(Ekxky,kx2,ky2,swell_mask,Hhat2,trackangle)  :
+    '''
+    Computes parameters from SWOT ssh spectrum. Updated 2025/07/10 for multiple partitions 
+    inputs :
+            - Ekxky     : spectrum
+            - kx2,ky2   : 2D array of wavenumbers
+            - swell_mask:  mask for selected area of spectrum (do not have to be binary) 
+	    - Hhat2     : squared FT of the filtering function 
+            - trackangle: direction of satellite track: used to shift directions back to nautical convention  
+    output : 
+            - Hs     : significant wave height or swell partition wave height(s)
+
+    '''
+    nmask=np.sum(swell_mask.astype(int).flatten())
+    npart=np.max(swell_mask.astype(int).flatten())
+    Hs=np.zeros(npart)
+    Lmm1=np.zeros(npart)
+    LE=np.zeros(npart)
+    Lmp1=np.zeros(npart)
+    dm=np.zeros(npart)
+    sigth=np.zeros(npart)
+    Qkk=np.zeros(npart)
+        
+    if nmask > 0:
+        dkx=kx2[0,1]-kx2[0,0]
+        dky=ky2[1,0]-ky2[0,0]
+        #E1D=(np.divide(Ekxky,Hhat2)).flatten()
+        # Corrects for 180 shift in direction
+        shift180=0
+        if np.abs(trackangle) > 90: 
+            shift180=180
+        
+        for ipart in range(npart):
+            E_mask=np.where( swell_mask == ipart+1, np.divide(Ekxky,Hhat2),0) 
+            varmask=np.sum(E_mask.flatten())*dkx*dky*2;  # WARNING: factor 2  corrects for double sided spectrum
+            Hs[ipart]=4*np.sqrt(varmask)
+
+
+            kn=np.sqrt(kx2**2+ky2**2)
+            m0=np.sum(E_mask.flatten())
+            mQ=np.sum((E_mask.flatten())**2)
+            Qkk[ipart]=np.sqrt(mQ/(m0**2*dkx*dky))/(2*np.pi)
+            inds=np.where(kn.flatten() > 5E-4)[0]
+            mm1=np.sum(E_mask.flatten()[inds]/kn.flatten()[inds])
+            mmE=np.sum(E_mask.flatten()[inds]/np.sqrt(kn.flatten()[inds]))
+            mp1=np.sum(np.multiply(E_mask,kn).flatten())
+            if m0 > 1E-6:
+                Lmm1[ipart]=mm1/m0
+                LE[ipart]  =(mmE/m0)**2
+                Lmp1[ipart]=m0/mp1
+                a1=np.sum(np.multiply(kx2.flatten()[inds]/kn.flatten()[inds],E_mask.flatten()[inds]))/m0
+                b1=np.sum(np.multiply(ky2.flatten()[inds]/kn.flatten()[inds],E_mask.flatten()[inds]))/m0
+            else:
+                Lmm1=0.
+                LE=0.
+                Lmp1=0.
+                a1=0.
+                b1=0.		           
+            sigth[ipart]=np.sqrt(2*(1-np.sqrt(a1**2+b1**2)))*180/np.pi
+            dm[ipart]=np.mod(90-(-trackangle+shift180+np.arctan2(b1,a1)*180/np.pi),360) # converted to direction from, nautical
+    else :
+        Hs=np.nan;Lmm1=np.nan;Lmp1=np.nan;LE=np.nan;dm=np.nan;sigth=np.nan;Q18=np.nan
+    return Hs,Lmm1,LE,Lmp1,dm,sigth,Qkk
+
+    
+######################  Defines L,H parametric models based on updated JONSWAP shape + propagation 
 def  Lmodel_eval(xdata,tds,incognita)  :
     '''
     Define wavelengths model
