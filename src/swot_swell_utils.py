@@ -1209,12 +1209,21 @@ def  SWOT_spectra_for_one_track(cycle,tracks,mask_choice,number_res,spectra_res,
        step=step+1
        subset_vars = {}
        for varname, var in ddla.data_vars.items():
+       
            if var.dims==2:
              subset_vars[varname] = var[indsub0:indsub0+indl,:]
            else:
              subset_vars[varname] = var[indsub0:indsub0+indl]
              # Combine the subset variables into a new dataset
-
+       #for varname, var in subset_vars.items():
+       #    print(f"{varname}: dims={getattr(var, 'dims', 'N/A')}, shape={getattr(var, 'shape', 'N/A')}")
+       if 'cross_track_distance' in subset_vars:
+           subset_vars.pop('cross_track_distance', None)
+           #var = subset_vars['cross_track_distance']
+           # Expand to shape (421, 519) by repeating across lines
+           #if var.shape == (421,):
+           #    expanded = np.tile(var[np.newaxis, :], (421, 1))  # shape (421, 421)
+           #    subset_vars['cross_track_distance'] = (('num_lines', 'num_pixels'), expanded)
        ddl = xr.Dataset(subset_vars, attrs=ddla.attrs)
 
 # gets data from SWOT L3 SSH file 
