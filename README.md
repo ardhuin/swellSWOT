@@ -7,6 +7,9 @@ Fabrice Ardhuin, Marine De Carlo, Taina Postec, Beatriz Molero, Adrien Nigou
 
 These tools have been used for the following papers: 
 http://dx.doi.org/10.13140/RG.2.2.32296.17925   Phase-resolved swells across ocean basins in SWOT altimetry data: revealing centimeter-scale wave heights including coastal reflection
+https://www.pnas.org/doi/10.1073/pnas.2513381122  Sizing the largest ocean waves using the SWOT mission
+
+
 
 The most simple Toolbox (using surface elevation data) is "swot_swell_fig1.ipynb", it takes a sample of SWOT "unsmoothed" data and computes a wave spectrum from it. 
 If you have co-located wave model output, it will also
