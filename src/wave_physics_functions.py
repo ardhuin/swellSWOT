@@ -6,10 +6,13 @@
 import numpy as np
 import sys
 from scipy.interpolate import griddata
+from scipy.interpolate import NearestNDInterpolator
+from scipy.spatial import cKDTree
+
 ###################### 
 ######################  
 # [Ekxky,kx,ky,kx2,ky2] = wavespec_Efth_to_Ekxky(eft1s,fren,dfreq,dirn,dth,dkx=0.0001,dky=0.0001,nkx=250,nky=250,doublesided=0) 
-def  wavespec_Efth_to_Ekxky(eft1s,fren,dfreq,dirn,dth,depth=3000.,dkx=0.0001,dky=0.0001,nkx=250,nky=250,doublesided=1,verbose=0,doplot=0,trackangle=0)  :
+def  wavespec_Efth_to_Ekxky(eft1s,fren,dfreq,dirn,dth,depth=3000.,dkx=0.0001,dky=0.0001,nkx=250,nky=250,doublesided=1,verbose=0,doplot=0,trackangle=0,indices=None)  :
     '''
     Converts E(f,theta) spectrum from buoy or model to E(kx,ky) spectrum similar to image spectrum
     2023/11/14: preliminary version, assumes dfreq is symmetric (not eaxctly true with WW3 output and waverider data) 
@@ -53,16 +56,37 @@ def  wavespec_Efth_to_Ekxky(eft1s,fren,dfreq,dirn,dth,depth=3000.,dkx=0.0001,dky
     kxn=km2*np.cos(dirm2+trackangle)
     kyn=km2*np.sin(dirm2+trackangle)
     #plt.scatter(kxn,kyn,  marker='.', s = 20)
+
+#    if kx2 is None:
     kx=np.linspace(-nkx*dkx,(nkx-1)*dkx,nkx*2)
     ky=np.linspace(-nky*dky,(nky-1)*dky,nky*2)
-    kx2, ky2 = np.meshgrid(kx,ky,indexing='ij')   #should we transpose kx2 and ky2 ???
-    Ekxky = griddata((kxn.flatten(), kyn.flatten()), (eftm*Jac).flatten(), (kx2, ky2), method='nearest')
+    kx2, ky2 = np.meshgrid(kx,ky,indexing='ij')   
+
+# build geometry once
+    points = np.column_stack((kxn.flatten(), kyn.flatten()))
+    
+   
+
+    if indices is None: 
+#        interp = NearestNDInterpolator(points, np.zeros(points.shape[0]))
+         tree = cKDTree(points)
+         grid_points = np.column_stack((kx2.ravel(), ky2.ravel()))
+         _, indices = tree.query(grid_points)
+
+#    interp.values = (eftm * Jac).flatten()
+#    Ekxky = interp(kx2, ky2)
+
+    values = (eftm * Jac).flatten()
+    Ekxky = values[indices].reshape(kx2.shape)
+
+#    Ekxky = griddata((kxn.flatten(), kyn.flatten()), (eftm*Jac).flatten(), (kx2, ky2), method='nearest')
+ 
     Hs2=4*np.sqrt(np.sum(np.sum(Ekxky))*dkx*dky)
 # make sure energy is exactly conserved (assuming kmax is consistent with fmax
     if verbose==1: 
         print('Hs1,Hs2:',Hs1,Hs2)
     Ekxky = Ekxky * (Hs1/Hs2)**2
-    return Ekxky,kx,ky,kx2,ky2
+    return Ekxky,kx,ky,kx2,ky2,indices
 
 #############################################################################
 def  wavespec_Efth_to_first3(efth,fren,dfreq,dirn,dth,cut=1E4)  :

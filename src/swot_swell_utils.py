@@ -40,15 +40,17 @@ from netCDF4 import Dataset
 
 ###################################################################
 def spec_settings_for_L3(nres,version):
-    dx=250
-    dy=235
+    dx=250      # cross-track resolution in meters
+    dy=235      # along-track resolution in meters: warning this is not a true constant... 
     indxc=259   # index of center pixel (at nadir) 
+    
+    # note that this is the number of boxes in the cross-track dimension: nindx=nX2tab[0]//nX2tab[indres]+(nX2tab[0]//nX2tab[indres]-1)
+    
 #    ISHIFT=30   # start of 40 km box for spectral analysis, in pixels, relative to track center
     ISHIFT=60   # start of 40 km box for spectral analysis, in pixels, relative to track center
     nkxr=20
     nkyr=21
     res_table=np.array([40,20,10])
-    restab=res_table[0:nres]
     nX2tab=np.array([80,40,20])
     nY2tab=np.array([84,42,21])
     if (version == 'alpha'):
@@ -65,9 +67,28 @@ def spec_settings_for_L3(nres,version):
        ntab=np.array([8,2,1])
     if (version == '20km'):
        samemask=0
+       res_table=np.array([20,20,10])
        mtab=np.array([2,2,2])
        ntab=np.array([2,2,2])
+       nX2tab=np.array([40,20,20])
+       nY2tab=np.array([42,21,21])
+    if (version == '20k5'):
+       samemask=0
+       res_table=np.array([20,20,10])
+       mtab=np.array([4,2,2])
+       ntab=np.array([4,2,2])
+       nX2tab=np.array([40,20,20])
+       nY2tab=np.array([42,21,21])
+    if (version == '40km'):
+       samemask=0
+       res_table=np.array([40,20,10])
+       mtab=np.array([1,2,2])
+       ntab=np.array([1,2,2])
+       nX2tab=np.array([80,20,20])
+       nY2tab=np.array([84,21,21])
     
+    restab=res_table[0:nres]
+
     
     indl=421 # alongtrack length of "chunk" of SWOT data being processed: this relatively big number is there because of the movies to get context.
     dind=84  # increment in alongtrack number of pixels   restab[0]*2 #int(abs(ddlat)*400)  # rough converstion 1 deg is 100 km and resolution is about 0.25 km
@@ -78,13 +99,23 @@ def spec_settings_for_L3(nres,version):
 
 
 ###################################################################
-def wavespec_Efth_to_kxky_SWOT(efth,modf,moddf, modang,moddth,f_xt,f_at,H,Hazc,H3,kxmax,kymax,dkx,dky,dkxr,dkyr,nkxr,nkyr,depth=3000.,doublesided=0,verbose=0,trackangle=0)  :
+
+def wavespec_Efth_to_kxky_SWOT(efth,modf,moddf, modang,moddth,f_xt,f_at,H,Hazc,H3,kxmax,kymax,dkx,dky,dkxr,dkyr,nkxr,nkyr,depth=3000.,doublesided=0,verbose=0,trackangle=0,interp=None)  :
+    """
+    Converts a model spectrum on a freq,dir grid to a kx,ky grid and applies aliasing and filters to simulate SWOT data
+
+    Returns:
+        Eta_WW3_obp_H2: ... 
+        
+    Note that this routine is pretty slow ... 
+
+    """
 
     dkxf=dkx/3;dkyf=dky/3;   # finer spectral resolution 
     nkx=600;nky=600;	     # not sure this is always high enough ... 
 
-    Ekxky,kxm,kym,kx2m,ky2m=wavespec_Efth_to_Ekxky(efth,modf,moddf,modang,moddth, \
-          depth=depth,dkx=dkxf,dky=dkyf,nkx=nkx,nky=nky,doublesided=doublesided,verbose=verbose,trackangle=trackangle)
+    Ekxky,kxm,kym,kx2m,ky2m,interp=wavespec_Efth_to_Ekxky(efth,modf,moddf,modang,moddth, \
+          depth=depth,dkx=dkxf,dky=dkyf,nkx=nkx,nky=nky,doublesided=doublesided,verbose=verbose,trackangle=trackangle,indices=interp)
           
     nxavg=round(dkxr/dkxf)   # number of spectral pixels to average
     nyavg=round(dkyr/dkyf)
@@ -131,10 +162,72 @@ def wavespec_Efth_to_kxky_SWOT(efth,modf,moddf, modang,moddth,f_xt,f_at,H,Hazc,H
     Eta_WW3_noa_H2=Sw_obp_H2[ik1:ik2,jk1:jk2].T
     Eta_WW3_res= H3[ik1:ik2,jk1:jk2].T * Ekxkyp[ik1:ik2,jk1:jk2].T
 
-    return Eta_WW3_obp_H2,Eta_WW3_obp_H,Eta_WW3_noa_H2,Eta_WW3_res,Eta_WW3_c,Ekxky,kxm,kym,ix1,iy1
+    return Eta_WW3_obp_H2,Eta_WW3_obp_H,Eta_WW3_noa_H2,Eta_WW3_res,Eta_WW3_c,Ekxky,kxm,kym,ix1,iy1,interp
+
+###################################################################
+
+def wavespec_Efth_to_kxky_SWOT_fast(efth,modf,moddf, modang,moddth,f_xt,f_at,H3,kxmax,kymax,dkx,dky,dkxr,dkyr,nkxr,nkyr,depth=3000.,doublesided=0,verbose=0,trackangle=0,aliasing=True,interp=None)  :
+    """
+    Converts a model spectrum on a freq,dir grid to a kx,ky grid and applies aliasing and filters to simulate SWOT data
+
+    Returns:
+        Eta_WW3_obp_H3: SWOT spectrum with filters applied
+        interp : indices for interpolation (to be used in next call) 
+
+    """
+
+    dkxf=dkx/3;dkyf=dky/3;   # finer spectral resolution 
+    nkx=600;nky=600;	     # not sure this is always high enough ... 
+
+    Ekxky,kxm,kym,kx2,ky2,interp=wavespec_Efth_to_Ekxky(efth,modf,moddf,modang,moddth, \
+          depth=depth,dkx=dkxf,dky=dkyf,nkx=nkx,nky=nky,doublesided=doublesided,verbose=verbose,trackangle=trackangle,indices=interp)
+          
+    nxavg=round(dkxr/dkxf)   # number of spectral pixels to average
+    nyavg=round(dkyr/dkyf)
+
+    ik1=(nkxr+1)//2;ik2=ik1+nkxr
+    jk1=(nkyr+1)//2;jk2=jk1+nkyr
+
+    ishift=(1-np.mod(nkxr,2))
+    jshift=(1-np.mod(nkyr,2))
+    ix1=int(nkx-kxmax/dkxf)+nxavg*(ishift-1)
+    iy1=int(nky-kymax/dkyf)+nyavg*(jshift-1)
+    di1=-(nxavg//2); di2=di1+nxavg
+    dj1=-(nyavg//2); dj2=dj1+nyavg
+
+
+# Coarsening of WW3 spectrum on kx,ky grid 
+    Ekxkyr=np.zeros((nkxr*2,nkyr*2))
+    Ekxkyp=np.zeros((nkxr*2,nkyr*2))
+# We have to deal with the non-symmetry of the spectrum : hence the np.roll 
+    Ekxkyds=(1-0.5*doublesided)*(Ekxky+doublesided*np.fliplr(np.roll( np.flipud(np.roll(Ekxky,-1,axis=0)),-1,axis=1) ))
+# Coarsening of WW3 spectrum on kx,ky grid 
+# We have to deal with the non-symmetry of the spectrum for even numbers (nkxr or nkyr) 
+
+# Extract region once
+    sub = Ekxkyds[
+        ix1+di1 : ix1 + nxavg*(nkxr*2) + di1,
+        iy1+dj1 : iy1 + nyavg*(nkyr*2) + dj1
+    ]
+# Reshape into blocks
+    sub = sub.reshape(nkxr*2, nxavg, nkyr*2, nyavg)
+
+# Average over block dimensions
+    Eta_WW3 = sub.mean(axis=(1,3))  # this is the WW3 spectrum on SWOT grid (with optional double-sided)
+        
+    Sw_obp_H3 = H3 * Eta_WW3
+# 4) Downsample in space to the target spatial frequency
+    if aliasing: 
+        fx_alias, fy_alias, Sw_alias_H3 = compute_aliased_spectrum_2D(f_xt, f_at, Sw_obp_H3, 1/0.250, 1/0.235, nrep=1)
+        Eta_WW3_obp_H3=Sw_alias_H3[ik1:ik2,jk1:jk2].T
+    else: 
+        Eta_WW3_obp_H3=Sw_obp_H3[ik1:ik2,jk1:jk2].T
+
+    return Eta_WW3_obp_H3,interp
+
     
 ###################################################################
-def  SWOTspec_to_HsLm(Ekxky,kx2,ky2,swell_mask,Hhat2,trackangle)  :
+def  SWOTspec_to_HsLm(Ekxky,kx2,ky2,swell_mask,Hhat2,trackangle,doublesided=1)  :
     '''
     Computes parameters from SWOT ssh spectrum
     inputs :
@@ -152,7 +245,7 @@ def  SWOTspec_to_HsLm(Ekxky,kx2,ky2,swell_mask,Hhat2,trackangle)  :
         E_mask=np.where( swell_mask > 0.5, np.divide(Ekxky,Hhat2),0) 
         dkx=kx2[0,1]-kx2[0,0]
         dky=ky2[1,0]-ky2[0,0]
-        varmask=np.sum(E_mask.flatten())*dkx*dky*2;  # WARNING: factor 2  is only correct if the mask is only over half of the spectral domain!!
+        varmask=np.sum(E_mask.flatten())*dkx*dky*(1+doublesided);  # WARNING: factor 2  is only correct if the mask is only over half of the spectral domain!!
         Hs=4*np.sqrt(varmask)
 
 # Corrects for 180 shift in direction
@@ -327,7 +420,7 @@ def  SWOTarray_flip_north_up(dlat,side,ssha,flas,sig0,X,Y)  :
 
 ###################################################################
 # modpec,inds,modelfound,timeww3,dist=swell.SWOTfind_model_spectrum(ds_ww3t,loncr,latcr,timec)
-def SWOTfind_model_spectrum(ds_ww3t,loncr,latcr,timec) :
+def SWOTfind_model_spectrum(ds_ww3t,loncr,latcr,timec,verbose=0) :
         times=str(timec)[0:13]+':00:00'
         format = '%Y-%m-%dT%H:%M:%S'
         timed  =datetime.datetime.strptime(times,format)
@@ -358,6 +451,10 @@ def SWOTfind_model_spectrum(ds_ww3t,loncr,latcr,timec) :
             dpt=ds_ww3t.dpt[inds].values
             #print('COUCOU lon:',loncr,latcr,timec,timeww3a,'##',len(indt),dist,ds_ww3t.longitude[inds].values,ds_ww3t.latitude[inds].values)
             modspec=ds_ww3t.efth[inds].squeeze()
+            eunits=ds_ww3t["efth"].attrs.get("units")
+            if (eunits == 'log10(m2 s rad-1+1E-12)'): 
+               modspec=10**(modspec)-1E-12
+
             U10=ds_ww3t.wnd[inds].values
             Udir=ds_ww3t.wnddir[inds].values
 
@@ -376,7 +473,8 @@ def SWOTfind_model_spectrum(ds_ww3t,loncr,latcr,timec) :
             U10=[]
             Udir=[]
             inds=0
-            print('Did not find model spectrum for location (lon,lat):',loncr,latcr,' at time ',timeww3, \
+            if verbose > 0: 
+                print('Did not find model spectrum for location (lon,lat):',loncr,latcr,' at time ',timeww3, \
                   '. Min dist was:',dist,'for this model point:', lonww3,latww3)
         return modspec,inds,modelfound,timeww3,lonww3,latww3,dist,U10,Udir,dpt
 
@@ -1084,6 +1182,7 @@ def  SWOT_spectra_for_one_track(cycle,tracks,mask_choice,number_res,spectra_res,
   cohthr=0.3
   flagssha=1E10;
   ntrack=int(tracks)
+  
   if (np.mod(ntrack,2)==1):
       td='ascending'
   else: 
@@ -1186,7 +1285,6 @@ def  SWOT_spectra_for_one_track(cycle,tracks,mask_choice,number_res,spectra_res,
 
     if (np.abs(l1) < 90): 
         ddl,indsub0,indsub1=swot.subset(ddla,[-0.5+float(l1), 0.5+float(l1)])
-        ind00=(indsub0//dind)*dind
     else:
         ind00=0
     if (np.abs(l2) < 90): 
@@ -1202,8 +1300,11 @@ def  SWOT_spectra_for_one_track(cycle,tracks,mask_choice,number_res,spectra_res,
     
     nind=len(indsubs)
     print('creating NetCDF file:',ncout)
-    SL3_nc=SWOT_create_L3_CNES_Light(ncout,modelOK,restab,nX2tab*2//mtab,nY2tab*2//ntab,nind,2,modf=modf,moddf=moddf,modang=modang)
+    ncross=2*(80//nX2tab[0]*2-1)
+    print('ncross,nX2tab,nY2tab:',ncross,nX2tab[0],nY2tab[0])
+    SL3_nc=SWOT_create_L3_CNES_Light(ncout,modelOK,restab,nX2tab*2//mtab,nY2tab*2//ntab,nind,ncross,modf=modf,moddf=moddf,modang=modang)
     ibox=0
+    firstg=0
     # Start of main loop over along track positions ... 
     for indsub0 in indsubs:
        step=step+1
@@ -1256,7 +1357,7 @@ def  SWOT_spectra_for_one_track(cycle,tracks,mask_choice,number_res,spectra_res,
           m=mtab[indres];n=ntab[indres]
           cfac=np.sqrt(n*m)
           # Defines number of spectral boxes for current resolution 
-          nindx=nX2tab[0]//nX2tab[indres]+(nX2tab[0]//nX2tab[indres]-1)  # Welch-type 50 % overlap in x direction ... 
+          nindx=ncross//2  # Welch-type 50 % overlap in x direction ... 
           nindy=nY2tab[0]//nY2tab[indres]
           if ires==40:
               # array of indices for left edge of each analysis window
@@ -1273,7 +1374,7 @@ def  SWOT_spectra_for_one_track(cycle,tracks,mask_choice,number_res,spectra_res,
                                ISHIFT+indxc,ISHIFT+indxc+nX2,ISHIFT+indxc+nX2*2, \
                                ISHIFT+indxc+nX2*3,ISHIFT+indxc+nX2*4,ISHIFT+indxc+nX2*5, \
                                ISHIFT+indxc+nX2*6])
-      
+          print('side:',indside,i1array)
           nxtile=nX2*2//m  # cross-track
           nytile=nY2*2//n  # along-track
 
@@ -1306,7 +1407,7 @@ def  SWOT_spectra_for_one_track(cycle,tracks,mask_choice,number_res,spectra_res,
              Xmem=X;
              Ymem=Y;
 # NB: with L3 data we do not need the cross-track flip, thus side is forced to "right"
-
+             #print('side,ind:',indside,iidx,indy,i1,i2,j1,j2)
              mybox,mybos,flbox,X,Y,sflip,signMTF,Look=SWOTarray_flip_north_up(dlat, \
                                                          'right',ssha[j1:j2,i1:i2],flas[j1:j2,i1:i2],sig0[j1:j2,i1:i2],Xmem,Ymem)
 
@@ -1378,10 +1479,16 @@ def  SWOT_spectra_for_one_track(cycle,tracks,mask_choice,number_res,spectra_res,
                    HH3=H3[ik1:ik2,jk1:jk2].T
 
 # converts the model spectrum to the SWOT (kx,ky) geometry
-                   Eta_WW3_obp_H2,Eta_WW3_obp_H,Eta_WW3_noa_H2,Eta_WW3_res,Eta_WW3_c,Ekxky,kxm,kym,ix1,iy1= \
+                   if firstg==0: 
+                       interp=None
+                   firstg=firstg+1
+                   Eta_WW3_obp_H2,Eta_WW3_obp_H,Eta_WW3_noa_H2,Eta_WW3_res,Eta_WW3_c,Ekxky,kxm,kym,ix1,iy1,interp= \
                               wavespec_Efth_to_kxky_SWOT(efth,modf,moddf, modang,moddth,f_xt,f_at,H,Hazc,H3, \
-                                            kxmax,kymax,dkx,dky,dkxr,dkyr,nxtile,nytile,doublesided=0,verbose=0,trackangle=(trackangle+sflip*180)*np.pi/180)
-        
+                                            kxmax,kymax,dkx,dky,dkxr,dkyr,nxtile,nytile,doublesided=0,verbose=0,trackangle=(trackangle+sflip*180)*np.pi/180,interp=interp)      
+                   
+                   # warning: neet other output spectra form mask ... 
+                   #Eta_WW3_obp_H2,interp=wavespec_Efth_to_kxky_SWOT_fast(efth,modf,moddf,
+                   #    modang,moddth,f_xt,f_at,H3,kxmax,kymax,dkx,dky,dkxr,dkyr,nkxr,nkyr,depth=3000.,doublesided=0,verbose=0,trackangle=0,aliasing=True,interp=interp)        
 
 
 # Defines swell mask  : uses function SWOTdefine_swell_mask
