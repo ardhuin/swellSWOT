@@ -83,9 +83,9 @@ def  wavespec_Efth_to_Ekxky(eft1s,fren,dfreq,dirn,dth,depth=3000.,dkx=0.0001,dky
  
     Hs2=4*np.sqrt(np.sum(np.sum(Ekxky))*dkx*dky)
 # make sure energy is exactly conserved (assuming kmax is consistent with fmax
-    if verbose==1: 
-        print('Hs1,Hs2:',Hs1,Hs2)
-    Ekxky = Ekxky * (Hs1/Hs2)**2
+#    if verbose==1: 
+#        print('Hs1,Hs2:',Hs1,Hs2)
+#    Ekxky = Ekxky * (Hs1/Hs2)**2
     return Ekxky,kx,ky,kx2,ky2,indices
 
 #############################################################################

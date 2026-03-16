@@ -29,10 +29,10 @@ import matplotlib.colors as mcolors
 import swot_ssh_utils as swot
 from wave_physics_functions import wavespec_Efth_to_Ekxky, wavespec_Efth_to_first3
 
-
-
 from numpy.ma import masked_array
 from scipy import ndimage
+from scipy import signal
+
 from  spectral_analysis_functions import *
 from  lib_filters_obp import *
 
@@ -225,7 +225,128 @@ def wavespec_Efth_to_kxky_SWOT_fast(efth,modf,moddf, modang,moddth,f_xt,f_at,H3,
 
     return Eta_WW3_obp_H3,interp
 
+
+
+###################################################################
+def average_spectral_blocks(arr, ix1, iy1, di1, dj1, nxavg, nyavg, nkxr, nkyr):
+    """
+    Extracts a region from a 2D spectral array, reshapes into blocks, and averages over block dimensions.
+
+    Parameters:
+    - arr: 2D numpy array (e.g., Ekxkyds)
+    - ix1, iy1: Starting indices for the region
+    - di1, dj1: Offsets for the region
+    - nxavg, nyavg: Number of spectral pixels to average in x and y
+    - nkxr, nkyr: Number of blocks in x and y
+
+    Returns:
+    - Averaged 2D spectrum
+    """
+    # Extract region
+    sub = arr[
+        ix1 + di1 : ix1 + nxavg * (nkxr * 2) + di1,
+        iy1 + dj1 : iy1 + nyavg * (nkyr * 2) + dj1
+    ]
+
+    # Check for empty slice
+    if sub.size == 0:
+        raise ValueError("Empty slice: check your indices and array bounds.")
+
+    # Reshape into blocks
+    sub = sub.reshape(nkxr * 2, nxavg, nkyr * 2, nyavg)
+
+    # Average over block dimensions
+    return sub.mean(axis=(1, 3))
+      
+
+
+
+###################################################################
+def wavespec_Efth_to_Efxfy_with_surfboard(
+    efth, modf, moddf, modang, moddth,
+    f_xt, f_at, H3,
+    kxmax, kymax, dkxf, dkyf,
+    dkxr, dkyr, nkxr, nkyr,
+    nkx,nky,depth=3000., doublesided=0, verbose=0,
+    trackangle=0, aliasing=True, interp=None,
+    beta=0.03, arctant=42
+): 
+    """
+    Converts a model spectrum on a freq,dir grid to a kx,ky grid and applies aliasing and filters to simulate SWOT data, also adds surf board (separate output) 
+
+    Returns:
+        Efxfy : SWOT-like spectrum with filters applied
+        ESB   : theoretical surf board (WARNING: 4 times smaller than Peral et al. 2015) 
+        ESSB  : SSB based on empirical beta value 
+        interp: indices for interpolation (to be used in next call) 
+
+    """
     
+    Ekxky,kxm,kym,kx2,ky2,interp=wavespec_Efth_to_Ekxky(efth,modf,moddf,modang,moddth, \
+          depth=depth,dkx=dkxf,dky=dkyf,nkx=nkx,nky=nky,doublesided=0,verbose=verbose,trackangle=trackangle,indices=interp)
+          
+    nxavg=round(dkxr/dkxf)   # number of spectral pixels to average; change of resolution
+    nyavg=round(dkyr/dkyf)
+
+
+    ik1=(nkxr+1)//2;ik2=ik1+nkxr
+    jk1=(nkyr+1)//2;jk2=jk1+nkyr
+
+    ishift=(1-np.mod(nkxr,2))
+    jshift=(1-np.mod(nkyr,2))
+    ix1=int(nkx-kxmax/dkxf)+nxavg*(ishift-1)
+    iy1=int(nky-kymax/dkyf)+nyavg*(jshift-1)
+    di1=-(nxavg//2); di2=di1+nxavg
+    dj1=-(nyavg//2); dj2=dj1+nyavg
+
+
+# WARNING: ALREADY DOUBLE-SIDED ... if called double-sided before 
+# We have to deal with the non-symmetry of the spectrum : hence the np.roll 
+    Ekxkyds=(1-0.5*doublesided)*(Ekxky+doublesided*np.fliplr(np.roll( np.flipud(np.roll(Ekxky,-1,axis=0)),-1,axis=1) ))
+
+# Computes convolution on unfiltered signal     
+    conv = np.fft.ifftshift(signal.fftconvolve(Ekxkyds, Ekxkyds[::-1, ::-1], mode='same')) * (dkxf * dkyf)
+    conv2=np.fft.fftshift(conv)
+    check=np.sum(Ekxkyds**2*dkxf * dkyf)
+
+    print('test conv in function:',conv[0,0],check,arctant,np.shape(conv))
+    ESB=(arctant**2*(2*np.pi*kx2)**2*conv2/2)
+    ESSB=beta**2*(256*(8-np.pi))*conv2/(np.pi*Hs**2)
+
+# Coarsening of WW3 spectrum on kx,ky grid 
+    Efxfyr = average_spectral_blocks(Ekxkyds, ix1, iy1, di1, dj1, nxavg, nyavg, nkxr, nkyr)
+#    kx2r   = average_spectral_blocks(kx2, ix1, iy1, di1, dj1, nxavg, nyavg, nkxr, nkyr)
+    ESBr   = average_spectral_blocks(ESB, ix1, iy1, di1, dj1, nxavg, nyavg, nkxr, nkyr)
+    ESSBr   = average_spectral_blocks(ESSB, ix1, iy1, di1, dj1, nxavg, nyavg, nkxr, nkyr)
+
+   
+# Computes convolution on unfiltered signal     
+#    conv = np.fft.ifftshift(signal.fftconvolve(Efxfyr, Efxfyr[::-1, ::-1], mode='same')) * (dkxr * dkyr)
+#    conv2=np.fft.fftshift(conv)
+#    check=np.sum(Efxfyr**2*dkx * dky)
+#    ESBr=(arctant**2*(2*np.pi*kx2r)**2*conv2/2)
+#    ESSBr=beta**2*(256*(8-np.pi))*conv2/(np.pi*Hs**2)
+
+    Efxfy_obp_H3=Efxfyr*H3
+    ESB_obp_H3=ESBr*H3    
+    ESSB_obp_H3=ESSBr*H3 #   ESSB*H3       
+    
+# 4) Downsample in space to the target spatial frequency
+    if aliasing: 
+        fx_alias, fy_alias, aliased = compute_aliased_spectrum_2D(f_xt, f_at, Efxfy_obp_H3, 1/0.250, 1/0.235, nrep=1)
+        Efxfy=aliased[ik1:ik2,jk1:jk2].T
+        fx_alias, fy_alias, aliased = compute_aliased_spectrum_2D(f_xt, f_at, ESB_obp_H3, 1/0.250, 1/0.235, nrep=1)
+        ESB=aliased[ik1:ik2,jk1:jk2].T
+        fx_alias, fy_alias, aliased  = compute_aliased_spectrum_2D(f_xt, f_at, ESSB_obp_H3, 1/0.250, 1/0.235, nrep=1)
+        ESSB=aliased[ik1:ik2,jk1:jk2].T
+    else: 
+        Efxfy =Efxfy_obp_H3[ik1:ik2,jk1:jk2].T
+        ESB   =ESB_obp_H3[ik1:ik2,jk1:jk2].T
+        ESSB  =ESSB_obp_H3[ik1:ik2,jk1:jk2].T
+    return Efxfy,ESB,ESSB,interp
+
+
+
 ###################################################################
 def  SWOTspec_to_HsLm(Ekxky,kx2,ky2,swell_mask,Hhat2,trackangle,doublesided=1)  :
     '''
@@ -240,6 +361,11 @@ def  SWOTspec_to_HsLm(Ekxky,kx2,ky2,swell_mask,Hhat2,trackangle,doublesided=1)  
             - Hs ... 
 
     '''
+    Ekxky = np.asarray(Ekxky)
+    kx2 = np.asarray(kx2)
+    ky2 = np.asarray(ky2)
+    swell_mask = np.asarray(swell_mask)
+    Hhat2 = np.asarray(Hhat2)
     nmask=np.sum(swell_mask.astype(int).flatten())
     if nmask > 0:
         E_mask=np.where( swell_mask > 0.5, np.divide(Ekxky,Hhat2),0) 
@@ -257,16 +383,22 @@ def  SWOTspec_to_HsLm(Ekxky,kx2,ky2,swell_mask,Hhat2,trackangle,doublesided=1)  
         m0=np.sum(E_mask.flatten())
         mQ=np.sum((E_mask.flatten())**2)
         Q18=np.sqrt(mQ/(m0**2*dkx*dky))/(2*np.pi)
-        inds=np.where(kn.flatten() > 5E-4)[0]
-        mm1=np.sum(E_mask.flatten()[inds]/kn.flatten()[inds])
-        mmE=np.sum(E_mask.flatten()[inds]/np.sqrt(kn.flatten()[inds]))
-        mp1=np.sum(np.multiply(E_mask,kn).flatten())
+        #inds=np.where(kn.flatten() > 5E-4)[0]
+        #mm1=np.sum(E_mask.flatten()[inds]/kn.flatten()[inds])
+        #mmE=np.sum(E_mask.flatten()[inds]/np.sqrt(kn.flatten()[inds]))
+        #mp1=np.sum(np.multiply(E_mask,kn).flatten())
+        mask = kn > 5e-4
+        mm1 = np.sum(E_mask[mask] / kn[mask])
+        mmE = np.sum(E_mask[mask] / np.sqrt(kn[mask]))
+        mp1 = np.sum(E_mask[mask] * kn[mask])
         if m0 > 1E-6:
            Lmm1=mm1/m0
            LE  =(mmE/m0)**2
            Lmp1=m0/mp1
-           a1=np.sum(np.multiply(kx2.flatten()[inds]/kn.flatten()[inds],E_mask.flatten()[inds]))/m0
-           b1=np.sum(np.multiply(ky2.flatten()[inds]/kn.flatten()[inds],E_mask.flatten()[inds]))/m0
+#           a1=np.sum(np.multiply(kx2.flatten()[inds]/kn.flatten()[inds],E_mask.flatten()[inds]))/m0
+#           b1=np.sum(np.multiply(ky2.flatten()[inds]/kn.flatten()[inds],E_mask.flatten()[inds]))/m0
+           a1=np.sum((kx2[mask]/kn[mask])*E_mask[mask])/m0
+           b1=np.sum((ky2[mask]/kn[mask])*E_mask[mask])/m0
         else:
            Lmm1=0.
            LE=0.
@@ -278,7 +410,6 @@ def  SWOTspec_to_HsLm(Ekxky,kx2,ky2,swell_mask,Hhat2,trackangle,doublesided=1)  
     else :
         Hs=np.nan;Lmm1=np.nan;Lmp1=np.nan;LE=np.nan;dm=np.nan;sigth=np.nan;Q18=np.nan
     return Hs,Lmm1,LE,Lmp1,dm,sigth,Q18
-
 
 
 ###################################################################
@@ -421,6 +552,19 @@ def  SWOTarray_flip_north_up(dlat,side,ssha,flas,sig0,X,Y)  :
 ###################################################################
 # modpec,inds,modelfound,timeww3,dist=swell.SWOTfind_model_spectrum(ds_ww3t,loncr,latcr,timec)
 def SWOTfind_model_spectrum(ds_ww3t,loncr,latcr,timec,verbose=0) :
+        """
+        Finds WAVEWATCH III spectrum (in trck NetCDF outpout file) that is nearest to the desired time, longitude, latitude 
+
+        Input: 
+        ds_ww3t is the dataset (already opened) 
+        timec : <class 'numpy.datetime64'>
+        Returns:
+        modspec: 2D spectrum 
+        ... inds,modelfound,timeww3,lonww3,latww3,dist,U10,Udir,dpt : ... 
+        
+        Note that this routine is pretty slow ... 
+
+        """
         times=str(timec)[0:13]+':00:00'
         format = '%Y-%m-%dT%H:%M:%S'
         timed  =datetime.datetime.strptime(times,format)
@@ -1193,7 +1337,7 @@ def  SWOT_spectra_for_one_track(cycle,tracks,mask_choice,number_res,spectra_res,
       filepattern=pth_swot+'SWOT_L3_LR_SSH_*Unsmoothed_'+cycle+'_'+tracks+'*.nc'
   else: 
       filepattern=pth_swot+'SWOT_L2_LR_SSH_*Unsmoothed_'+cycle+'_'+tracks+'*.nc' 
-
+  print('Looking for file:',filepattern)
   file_list = glob.glob(filepattern)
   if (len(file_list) > 0) : 
     file_swot=file_list[0]
@@ -1456,7 +1600,7 @@ def  SWOT_spectra_for_one_track(cycle,tracks,mask_choice,number_res,spectra_res,
                 H2=H*Hptr                     # note that when model data is also used, H3 is defined below to include az cut-off 
                 H3=H2
 
-# these filters now have smae dimension as the spectra 
+# these filters now have same dimension as the spectra 
                 HH =H[ik1:ik2,jk1:jk2].T
                 HH1=Hptr[ik1:ik2,jk1:jk2].T
                 HH2=H2[ik1:ik2,jk1:jk2].T

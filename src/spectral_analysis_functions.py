@@ -603,7 +603,7 @@ def FFT2D_two_arrays_nm_detrend_flag(arraya,arrayb,arrayf,dx,dy,n,m,isplot=0,det
             Z2 = C[0]*X2 + C[1]*Y2 + C[2]
             detrendb = array2-Z2
           elif detrend=='quadratic':
-            # Fits a plane using least squares
+            # Fits a 2nd order surface
             
             X=np.arange(nxtile)
             Y=np.arange(nytile)
