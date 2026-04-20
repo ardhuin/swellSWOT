@@ -551,6 +551,7 @@ def FFT2D_two_arrays_nm_detrend_flag(arraya,arrayb,arrayf,dx,dy,n,m,isplot=0,det
         med=np.nanmedian(array1)
         medb=np.nanmedian(array2)
 
+
         array1= np.where(np.isnan(array1),med,array1)
         array1= np.where(np.isinf(array1),med,array1)
         array2= np.where(np.isnan(array2),medb,array2)
@@ -560,7 +561,8 @@ def FFT2D_two_arrays_nm_detrend_flag(arraya,arrayb,arrayf,dx,dy,n,m,isplot=0,det
         array1flat=array1.flatten()
         indf=np.where(abs(array1flat-med) > 15)[0]
         med2=np.nanmedian(array1flat[indf])
-        array1= np.where(abs(array1-med) < 15,array1,array1+med-med2)
+        if np.isfinite(med2):
+            array1= np.where(abs(array1-med) < 15,array1,array1+med-med2)
     
         #indz= np.where(array3 == 0)[0]
         if (vartiles1[im] > 3*var1OK): 
@@ -620,7 +622,10 @@ def FFT2D_two_arrays_nm_detrend_flag(arraya,arrayb,arrayf,dx,dy,n,m,isplot=0,det
             A = np.c_[XX*XX,YY*YY,XX*YY,XX,YY, np.ones(nxy)]
             ZZ = array1.T.flatten()[inds]
             
-            
+            n1=np.isnan(ZZ).sum()
+            n2=np.isinf(ZZ).sum()
+            n3=np.isnan(A).sum()
+            n4=np.isinf(A).sum()
             C,_,_,_ = scipy.linalg.lstsq(A,ZZ)    # coefficients
             Z2 = C[0]*X2*X2 + C[1]*Y2*Y2 + C[2]*X2*Y2 + C[3]*X2 + C[4]*Y2 + C[5]
             detrenda = array1- Z2
@@ -680,4 +685,53 @@ def FFT2D_two_arrays_nm_detrend_flag(arraya,arrayb,arrayf,dx,dy,n,m,isplot=0,det
     return Eta,Etb,ang,angstd,coh,crosr,phases,kx2,ky2,dkxtile,dkytile,arrayad,arraybd,nspec
 
 
+
+def detrend_2d_bilinear(data):
+    rows, cols = data.shape
+    x, y = np.meshgrid(np.arange(cols), np.arange(rows))
+    x = x.flatten()
+    y = y.flatten()
+    Z = data.flatten()
+
+    # Design matrix
+    X = np.column_stack([np.ones_like(x), x, y, x*y])
+
+    # Solve for coefficients
+    beta, _, _, _ = np.linalg.lstsq(X, Z, rcond=None)
+
+    # Reconstruct the trend
+    trend = X @ beta
+    trend = trend.reshape(rows, cols)
+
+    # Detrend
+    detrended = data - trend
+    return detrended
+
+    import numpy as np
+
+def detrend_2d_quadratic(data):
+    rows, cols = data.shape
+    x, y = np.meshgrid(np.arange(cols), np.arange(rows))
+    x = x.flatten()
+    y = y.flatten()
+    Z = data.flatten()
+
+    # Design matrix: [1, x, y, x^2, y^2, x*y]
+    X = np.column_stack([
+        np.ones_like(x),
+        x, y,
+        x**2, y**2,
+        x*y
+    ])
+
+    # Solve for coefficients
+    beta, _, _, _ = np.linalg.lstsq(X, Z, rcond=None)
+
+    # Reconstruct the trend
+    trend = X @ beta
+    trend = trend.reshape(rows, cols)
+
+    # Detrend
+    detrended = data - trend
+    return detrended
 

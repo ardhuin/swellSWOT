@@ -53,6 +53,9 @@ def spec_settings_for_L3(nres,version):
     res_table=np.array([40,20,10])
     nX2tab=np.array([80,40,20])
     nY2tab=np.array([84,42,21])
+    dind=84  # increment in alongtrack number of pixels   restab[0]*2 #int(abs(ddlat)*400)  # rough converstion 1 deg is 100 km and resolution is about 0.25 km
+    dind=dind*2  # this is the value used by CNES 
+
     if (version == 'alpha'):
        samemask=1
        mtab=np.array([8,4,2])
@@ -79,6 +82,7 @@ def spec_settings_for_L3(nres,version):
        ntab=np.array([4,2,2])
        nX2tab=np.array([40,20,20])
        nY2tab=np.array([42,21,21])
+       dind=84 # this gives 50% overlap of succesive alongtrack boxes. 
     if (version == '40km'):
        samemask=0
        res_table=np.array([40,20,10])
@@ -86,13 +90,18 @@ def spec_settings_for_L3(nres,version):
        ntab=np.array([1,2,2])
        nX2tab=np.array([80,20,20])
        nY2tab=np.array([84,21,21])
+    if (version == '40k20'):
+       samemask=0
+       res_table=np.array([40,20,10])
+       mtab=np.array([2,2,2])
+       ntab=np.array([2,2,2])
+       nX2tab=np.array([80,20,20])
+       nY2tab=np.array([84,21,21])
     
     restab=res_table[0:nres]
 
     
     indl=421 # alongtrack length of "chunk" of SWOT data being processed: this relatively big number is there because of the movies to get context.
-    dind=84  # increment in alongtrack number of pixels   restab[0]*2 #int(abs(ddlat)*400)  # rough converstion 1 deg is 100 km and resolution is about 0.25 km
-    dind=dind*2  # this is the value used by CNES 
     hemiNS=['A','N','S']
     hemiWE=['A','E','W']
     return dx,dy,indxc,ISHIFT,nkxr,nkyr,restab,nX2tab,nY2tab,mtab,ntab,indl,dind,samemask,hemiNS,hemiWE
@@ -269,6 +278,7 @@ def wavespec_Efth_to_Efxfy_with_surfboard(
     dkxr, dkyr, nkxr, nkyr,
     nkx,nky,depth=3000., doublesided=0, verbose=0,
     trackangle=0, aliasing=True, interp=None,
+    alpha=1,
     beta=0.03, arctant=42
 ): 
     """
@@ -282,6 +292,9 @@ def wavespec_Efth_to_Efxfy_with_surfboard(
 
     """
     
+    Etot=np.sum(np.sum(efth[:,:],axis=1)*moddth*moddf[:])
+    Hs=4*np.sqrt(Etot)
+
     Ekxky,kxm,kym,kx2,ky2,interp=wavespec_Efth_to_Ekxky(efth,modf,moddf,modang,moddth, \
           depth=depth,dkx=dkxf,dky=dkyf,nkx=nkx,nky=nky,doublesided=0,verbose=verbose,trackangle=trackangle,indices=interp)
           
@@ -309,9 +322,10 @@ def wavespec_Efth_to_Efxfy_with_surfboard(
     conv2=np.fft.fftshift(conv)
     check=np.sum(Ekxkyds**2*dkxf * dkyf)
 
-    print('test conv in function:',conv[0,0],check,arctant,np.shape(conv))
-    ESB=(arctant**2*(2*np.pi*kx2)**2*conv2/2)
-    ESSB=beta**2*(256*(8-np.pi))*conv2/(np.pi*Hs**2)
+    #print('test conv in function:',conv[0,0],check,arctant,np.shape(conv))
+    ESB=(arctant**2*(2*np.pi*kx2)**2*conv2/2)*(1+alpha)**2
+    #ESSB=(2*np.pi)**2*beta**2*(256*(8-np.pi))*conv2/(np.pi*Hs**2)
+    ESSB=beta**2*(256*(8-2*np.pi))*conv2/(np.pi*Hs**2)
 
 # Coarsening of WW3 spectrum on kx,ky grid 
     Efxfyr = average_spectral_blocks(Ekxkyds, ix1, iy1, di1, dj1, nxavg, nyavg, nkxr, nkyr)
@@ -348,7 +362,7 @@ def wavespec_Efth_to_Efxfy_with_surfboard(
 
 
 ###################################################################
-def  SWOTspec_to_HsLm(Ekxky,kx2,ky2,swell_mask,Hhat2,trackangle,doublesided=1)  :
+def  SWOTspec_to_HsLm(Ekxky,kx2,ky2,swell_mask,Hhat2,trackangle,doublesided=1,kmin=5e-4)  :
     '''
     Computes parameters from SWOT ssh spectrum
     inputs :
@@ -383,11 +397,11 @@ def  SWOTspec_to_HsLm(Ekxky,kx2,ky2,swell_mask,Hhat2,trackangle,doublesided=1)  
         m0=np.sum(E_mask.flatten())
         mQ=np.sum((E_mask.flatten())**2)
         Q18=np.sqrt(mQ/(m0**2*dkx*dky))/(2*np.pi)
-        #inds=np.where(kn.flatten() > 5E-4)[0]
+        #inds=np.where(kn.flatten() > 5E-4)[0]+
         #mm1=np.sum(E_mask.flatten()[inds]/kn.flatten()[inds])
         #mmE=np.sum(E_mask.flatten()[inds]/np.sqrt(kn.flatten()[inds]))
         #mp1=np.sum(np.multiply(E_mask,kn).flatten())
-        mask = kn > 5e-4
+        mask = kn > kmin
         mm1 = np.sum(E_mask[mask] / kn[mask])
         mmE = np.sum(E_mask[mask] / np.sqrt(kn[mask]))
         mp1 = np.sum(E_mask[mask] * kn[mask])
@@ -459,7 +473,8 @@ def  SWOTspec_to_HsLm_new(Ekxky,kx2,ky2,swell_mask,Hhat2,trackangle)  :
             mm1=np.sum(E_mask.flatten()[inds]/kn.flatten()[inds])
             mmE=np.sum(E_mask.flatten()[inds]/np.sqrt(kn.flatten()[inds]))
             mp1=np.sum(np.multiply(E_mask,kn).flatten())
-            if m0 > 1E-6:
+            
+            if m0 > 1E-12:
                 Lmm1=mm1/m0
                 LE  =(mmE/m0)**2
                 Lmp1=m0/mp1
@@ -855,8 +870,8 @@ def draw_mask(axsfig,kx2,dkx,ky2,dky,vertices,color='k',lw=3):
 
 
 #######################" Plotting routines ########################
-def arrows_on_spectrum(axsfig,sflip,side,trackangle,color='k',lw=3,fs1=20):
-    arx0=0;ary0=0;arxd=0.2;aryd=0.2;arwid=0.1;gr=[0.,1,0.]
+def arrows_on_spectrum(axsfig,sflip,side,trackangle,color='k',lw=3,fs1=20,arx0=0,ary0=0,arxd=0.2,aryd=0.2,arwid=0.1):
+    gr=[0.,1,0.]
     flip=-1+2*(1-sflip)
     sidf=1-2*(1-side)
     axsfig.arrow(arx0, ary0, -arxd*np.sin(trackangle*np.pi/180), aryd*np.cos(trackangle*np.pi/180), linewidth=4,color='k',head_width=arwid) 
@@ -1100,6 +1115,8 @@ def  SWOT_create_L3_CNES_Light(saving_name,modelOK,restab,nkxtab,nkytab,nind,ncr
         SL3_nc_var = SL3_nc_fid.createVariable('latitude'+sres, np.float32, ('n_box'))
         SL3_nc_var = SL3_nc_fid.createVariable('sigma0_mean'+sres, np.float32, ('n_box'))
         SL3_nc_var = SL3_nc_fid.createVariable('sigma0_std'+sres, np.float32, ('n_box'))
+        SL3_nc_var = SL3_nc_fid.createVariable('ssh_uncertainty'+sres, np.float32, ('n_box'))
+        SL3_nc_var = SL3_nc_fid.createVariable('ssh_uncertainty_std'+sres, np.float32, ('n_box'))
                
         SL3_nc_var = SL3_nc_fid.createVariable('H18'+sres, np.float32, ('n_box'))
         SL3_nc_var = SL3_nc_fid.createVariable('L18'+sres, np.float32, ('n_box'))
@@ -1134,7 +1151,9 @@ def  SWOT_create_L3_CNES_Light(saving_name,modelOK,restab,nkxtab,nkytab,nind,ncr
  
 # For higher resolution: only spectra and integrated parameters 
         SL3_nc_varE4 = SL3_nc_fid.createVariable('Efxfy_SWOT'+sres, np.float32, ('n_box','nfy'+sres, 'nfx'+sres), zlib=True)
-        SL3_nc_varE4.setncatts({'long_name': u"PSD of surface elevation over 40 km side box", 'units': u"m**4"})                   
+        SL3_nc_varE4.setncatts({'long_name': u"PSD of surface elevation", 'units': u"m**4"})                   
+        SL3_nc_varE4 = SL3_nc_fid.createVariable('Efxfy_uncertainty'+sres, np.float32, ('n_box','nfy'+sres, 'nfx'+sres), zlib=True)
+        SL3_nc_varE4.setncatts({'long_name': u"PSD of uncertainty", 'units': u"m**4"})                   
         SL3_nc_varE4 = SL3_nc_fid.createVariable('mask'+sres, np.byte, ('n_box','nfy'+sres, 'nfx'+sres))
         SL3_nc_varE4.setncatts({'long_name': u"mask_for_wind_sea_and_swell"})
 
@@ -1263,7 +1282,7 @@ def  SWOT_write_L3_old(SL3_nc,step,indx,indy,indres,sres,kx2,ky2,timec,trackangl
 def  SWOT_write_L3_CNES_Light(SL3_nc,ibox,step,indside,indx,indy,indres,sres,kx2,ky2,timec,trackangle, \
                        boxindices,coh,ang,crosr, \
                        Q18_SWOT,lonc,latc,sig0mean,sig0std,fracfla,qual_mask,Hs_SWOT_mask,\
-                       Lm_SWOT,dm_SWOT,amask,HH,HH1,Etacor):
+                       Lm_SWOT,dm_SWOT,amask,HH,HH1,Etacor,Etccor=0,urms=0,ustd=0):
      writeOK=0
 # Write variables to NetCDF file
      if (ibox==0):
@@ -1288,6 +1307,8 @@ def  SWOT_write_L3_CNES_Light(SL3_nc,ibox,step,indside,indx,indy,indres,sres,kx2
      SL3_nc.variables['ang_SWOT'+sres][ibox,:,:]=np.degrees(ang)
      SL3_nc.variables['crosr_SWOT'+sres][ibox,:,:]=crosr
      SL3_nc.variables['Q18'+sres][ibox]=Q18_SWOT
+     SL3_nc.variables['ssh_uncertainty'][ibox]=urms
+     SL3_nc.variables['ssh_uncertainty_std'][ibox]=ustd
          
      SL3_nc.variables['longitude'+sres][ibox] = lonc 
      SL3_nc.variables['latitude'+sres][ibox] = latc
@@ -1301,6 +1322,7 @@ def  SWOT_write_L3_CNES_Light(SL3_nc,ibox,step,indside,indx,indy,indres,sres,kx2
      SL3_nc.variables['mask'+sres][ibox,:,:] = amask
       
      SL3_nc.variables['Efxfy_SWOT'+sres][ibox,:,:]=Etacor
+     SL3_nc.variables['Efxfy_uncertainty'+sres][ibox,:,:]=Etccor
             
      return writeOK
      
@@ -1358,18 +1380,19 @@ def  SWOT_spectra_for_one_track(cycle,tracks,mask_choice,number_res,spectra_res,
           sig0_varname='sigma0'
           temp=ddla.sigma0.values
           ddla['sigma0'][:,:]=10*np.log10(temp)
-
+          unce_varname=''
     else:
         ddll = xr.open_dataset(file_swot, group='left') # 82941 , 240
         ddlr = xr.open_dataset(file_swot, group='right') # 82941 , 240
 
-        varlis1=['ssh_karin_2','sig0_karin_2','ssh_karin_2_qual','latitude','longitude','time'] 
-        varlist=['ssh_karin_2','sig0_karin_2','ssh_karin_2_qual','latitude','longitude'] 
+        varlis1=['ssh_karin_2','sig0_karin_2','ssh_karin_2_qual','latitude','longitude','time','ssh_karin_uncert'] 
+        varlist=['ssh_karin_2','sig0_karin_2','ssh_karin_2_qual','latitude','longitude','ssh_karin_uncert'] 
         ddla = ddlr[varlis1].copy().pad(num_pixels=(279,0))  # Make a copy of the original ddll to avoid modifying it in place
 
         for thisvar in varlist :
             ddla[thisvar][:, 0:240] = np.flip(ddll[thisvar].values, axis=1) 
 
+        unce_varname='ssh_karin_uncert'
         ssh_varname= 'ssh_karin_2'
         qual_varname='ssh_karin_2_qual'
         sig0_varname='sig0_karin_2'
@@ -1472,6 +1495,8 @@ def  SWOT_spectra_for_one_track(cycle,tracks,mask_choice,number_res,spectra_res,
        ddl = xr.Dataset(subset_vars, attrs=ddla.attrs)
 
 # gets data from SWOT L3 SSH file 
+       if (level=='L2'): 
+          unce = ddl[unce_varname]
        ssha = ddl[ssh_varname]
        flag = ddl[qual_varname]
        ssha = np.where(flag < flagssha, ssha, np.nan)
@@ -1552,6 +1577,12 @@ def  SWOT_spectra_for_one_track(cycle,tracks,mask_choice,number_res,spectra_res,
              Ymem=Y;
 # NB: with L3 data we do not need the cross-track flip, thus side is forced to "right"
              #print('side,ind:',indside,iidx,indy,i1,i2,j1,j2)
+             urms=0.
+             if (level=='L2'): 
+                urms =np.sqrt(np.nanmean(unce[j1:j2,i1:i2]**2))
+                ustd =np.nanstd(unce[j1:j2,i1:i2])
+                mybox,mybou,flbox,X,Y,sflip,signMTF,Look=SWOTarray_flip_north_up(dlat, \
+                                                            'right',ssha[j1:j2,i1:i2],flas[j1:j2,i1:i2],unce[j1:j2,i1:i2],Xmem,Ymem)
              mybox,mybos,flbox,X,Y,sflip,signMTF,Look=SWOTarray_flip_north_up(dlat, \
                                                          'right',ssha[j1:j2,i1:i2],flas[j1:j2,i1:i2],sig0[j1:j2,i1:i2],Xmem,Ymem)
 
@@ -1569,6 +1600,11 @@ def  SWOT_spectra_for_one_track(cycle,tracks,mask_choice,number_res,spectra_res,
     # Computes spectrum from SWOT SSH data
     # Note: this uses tiles: we may use these higher resolution estimates to avoid duplication 
              (Eta,Etb,ang,angstd,coh,crosr,phases,ky2,kx2,dky,dkx,detrenda,detrendb,nspec)=FFT2D_two_arrays_nm_detrend_flag(mybox,10**(0.1*mybos),flbox, \
+                                                                                                     dy,dx,n,m,detrend='quadratic') 
+
+             
+             if (level=='L2'): 
+                (Etc,Eta2,ang2,angstd2,coh2,crosr2,phase2,ky2,kx2,dky,dkx,detrenda2,detrendb,nspec)=FFT2D_two_arrays_nm_detrend_flag(mybou,mybox,flbox, \
                                                                                                      dy,dx,n,m,detrend='quadratic') 
 
          
@@ -1715,9 +1751,15 @@ def  SWOT_spectra_for_one_track(cycle,tracks,mask_choice,number_res,spectra_res,
              sig0std=np.nanstd(mybos)
 
              Etacor=Eta/HH3
+             if (level=='L2'): 
+                Etccor=Etc/HH
+             else:
+                Etccor=None
+                ustd=None
+                
              writeOK=SWOT_write_L3_CNES_Light(SL3_nc,ibox,step,indside,indx,indy,indres,sres,kx2,ky2,timec,trackangle,boxindices,coh,ang,crosr, \
                        Q18_SWOT,lonc,latc,sig0mean,sig0std,fracfla,qual_mask,Hs_SWOT_mask,\
-                       LE_SWOT,dm_SWOT,amask,HH,HH1,Etacor)
+                       LE_SWOT,dm_SWOT,amask,HH,HH1,Etacor,Etccor=Etccor,urms=urms,ustd=ustd)
 
              print('Writing to file for latitude ',latc,' in range [',latmin,latmax,'] , indices:', \
                    step,indside,ires,'##',indy,iidx,', size:',np.shape(Eta))
@@ -1730,6 +1772,7 @@ def  SWOT_spectra_for_one_track(cycle,tracks,mask_choice,number_res,spectra_res,
                    I1=indxc-ISHIFT//2-200;I2=I1+200;J1=0;J2=420;
                 if indside==1:
                    I1=indxc+ISHIFT//2;I2=I1+200;J1=0;J2=420;
+
                 SSHA,SIG0,FLAS,X,Y,sflip,signMTF,Look=SWOTarray_flip_north_up(dlat,'right',ssha[J1:J2,I1:I2], \
                                                                                     flas[J1:J2,I1:I2],sig0[J1:J2,I1:I2],Xmem,Ymem)
 
@@ -2225,3 +2268,70 @@ def  Hmodel(incognita,data)  :
        cy= ( ratio - np.log(ratio)).sum()
     
     return cy
+    
+    
+    
+    
+import numpy as np
+import netCDF4 as nc
+#from scipy.interpolate import griddata
+from scipy.spatial import cKDTree
+
+
+def correct_ssha_with_swot_mean(
+    ncfile_path,
+    lat_2d, lon_2d, ssha_2d, side,
+    method='linear'
+):
+    """
+    Corrects L2 SSHA by subtracting the SWOT mean SSH (from NetCDF) interpolated to the 2D grid.
+
+    Parameters:
+    - ncfile_path: str, path to the SWOT mean SSH NetCDF file
+    - lat_2d, lon_2d: 2D arrays, latitude and longitude of the L2 grid
+    - ssha_2d: 2D array, the SSHA to correct
+    - side:  0 or 1 indicating the side
+    - method: str, interpolation method ('linear', 'nearest', 'cubic')
+
+    Returns:
+    - ssha_corrected: 2D array, the corrected SSHA
+    """
+
+    # Load SWOT mean SSH
+    with nc.Dataset(ncfile_path, 'r') as ncfile:
+        mss= ncfile['ssha_med'][side, :, :]  # shape: (2, 177, 25)
+        lat_mss = ncfile['latitude'][side,:,:]
+        lon_mss = ncfile['longitude'][side, :, :]
+
+   
+   
+    points = np.column_stack((lat_mss.ravel(), lon_mss.ravel()))
+    values = mss.ravel()
+
+    valid_src = np.isfinite(values)
+
+    points = points[valid_src]
+    values = values[valid_src]
+
+    tree = cKDTree(points)
+
+    lat_flat = lat_2d.ravel()
+    lon_flat = lon_2d.ravel()
+
+    query = np.column_stack((lat_flat, lon_flat))
+
+    dist, idx = tree.query(query, k=8)
+    # avoid division by zero
+    weights = 1.0 / (dist + 1e-12)
+
+    # normalize
+    weights /= weights.sum(axis=1, keepdims=True)
+
+    # weighted interpolation
+    ssha_interp_flat = np.sum(values[idx] * weights, axis=1)
+    #ssha_interp_flat = values[idx]   # IMPORTANT: SAME SOURCE VALUES
+    ssha_interp = ssha_interp_flat.reshape(lat_2d.shape)
+
+    ssha_corrected = ssha_2d - ssha_interp
+
+    return ssha_corrected,ssha_interp

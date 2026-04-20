@@ -8,8 +8,9 @@ Fabrice Ardhuin, Marine De Carlo, Taina Postec, Beatriz Molero, Adrien Nigou
 These tools have been used for the following papers: 
 http://dx.doi.org/10.13140/RG.2.2.32296.17925     Phase-resolved swells across ocean basins in SWOT altimetry data: revealing centimeter-scale wave heights including coastal reflection
 https://www.pnas.org/doi/10.1073/pnas.2513381122  Sizing the largest ocean waves using the SWOT mission
+https://www.nature.com/articles/s41467-026-71541-6 Swell-driven bursts of 26 s and 16 s seismic spectral peaks in the Gulf of Guinea
 
-
+(in prep) Noise or signal? Surface gravity waves in SWOT sea level measurements at wavelengths under 10 km
 
 The most simple Toolbox (using surface elevation data) is "swot_swell_fig1.ipynb", it takes a sample of SWOT "unsmoothed" data and computes a wave spectrum from it. 
 If you have co-located wave model output, it will also
@@ -25,6 +26,12 @@ Note that this produces very similar files ... but not exactly the same. More la
 - plot_one_spectrum.ipynb : this notebook just plots one spectrum 
 - L3_fit_one_track_LandH.ipynb : plots parameters for an entire track but also includes 
 an interactive plot of single spectra (using a widget slider)  
+
+### simulation of surf-board effects 
+- surfboard_areas.ipynb : computes nonlinear SWOT mapping for academic wave group cases
+- surfboard_realcases.ipynb : computes nonlinear SWOT mapping for simulated wave spectra
+ 
+
 
 ### spectral partitionning using watershed method
 - plot_watershed.ipynb : this works with version 2 of the CNES L3 product, but also with version 2.1_light (with X-spectra phase included): here are examples here [https://drive.google.com/drive/folders/1Eu_KRgLw6uHMKNFgUUJ6n6w5gY_CMNVB?usp=drive_link](https://drive.google.com/drive/folders/1SSUNcgist3ZEP2cJi6p_AKEkf426LwFM?usp=drive_link)
