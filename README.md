@@ -32,7 +32,10 @@ an interactive plot of single spectra (using a widget slider)
 ### simulation of surf-board effects 
 - surfboard_areas.ipynb : computes nonlinear SWOT mapping for academic wave group cases
 - surfboard_realcases.ipynb : computes nonlinear SWOT mapping for simulated wave spectra
- 
+
+### SWOT filter properties
+- checking_obp_filter.ipynb : makes a few plots of the OBP filter and PTR effects. 
+
 ### analysis of SSH noise and its relationship to waves
 - TO BE ADDED LATER: analysis of both 1D and 2D noise, with 1D analysis based on Zhang and Callies. 
 - noise_analysis_2D_only_20km_L2_med.ipynb  : produces an netcdf file that contains 2D noise information and related model data
