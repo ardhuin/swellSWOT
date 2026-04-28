@@ -24,6 +24,8 @@ Note that this produces very similar files ... but not exactly the same. More la
 
 ### basic plotting of SWOT spectra (and SSH map if you have it)
 - plot_one_spectrum.ipynb : this notebook just plots one spectrum 
+- plot_spectra_slider.ipynb : interactive tool to plot SSH and corresponding spectra along the track. Also displays 250 m grid distortions due to waves.
+
 - L3_fit_one_track_LandH.ipynb : plots parameters for an entire track but also includes 
 an interactive plot of single spectra (using a widget slider)  
 
@@ -31,6 +33,10 @@ an interactive plot of single spectra (using a widget slider)
 - surfboard_areas.ipynb : computes nonlinear SWOT mapping for academic wave group cases
 - surfboard_realcases.ipynb : computes nonlinear SWOT mapping for simulated wave spectra
  
+### analysis of SSH noise and its relationship to waves
+- TO BE ADDED LATER: analysis of both 1D and 2D noise, with 1D analysis based on Zhang and Callies. 
+- noise_analysis_2D_only_20km_L2_med.ipynb  : produces an netcdf file that contains 2D noise information and related model data
+- noise_analysis_2D_only_20km_L2_med_from_segments.ipynb : analysis of SWOT 2D noise information 
 
 
 ### spectral partitionning using watershed method
