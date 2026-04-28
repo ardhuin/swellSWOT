@@ -4,8 +4,6 @@
 # === 0. Import Packages ===========================================================
 # ==================================================================================
 import numpy as np
-
-import numpy as np
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 from scipy import signal
@@ -707,7 +705,6 @@ def detrend_2d_bilinear(data):
     detrended = data - trend
     return detrended
 
-    import numpy as np
 
 def detrend_2d_quadratic(data):
     rows, cols = data.shape

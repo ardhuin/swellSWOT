@@ -381,8 +381,11 @@ def  SWOTspec_to_HsLm(Ekxky,kx2,ky2,swell_mask,Hhat2,trackangle,doublesided=1,km
     swell_mask = np.asarray(swell_mask)
     Hhat2 = np.asarray(Hhat2)
     nmask=np.sum(swell_mask.astype(int).flatten())
+    kn=np.sqrt(kx2**2+ky2**2)
+    
     if nmask > 0:
-        E_mask=np.where( swell_mask > 0.5, np.divide(Ekxky,Hhat2),0) 
+        mask=np.where( (swell_mask > 0.5) & (kn > kmin))[0]
+        E_mask=np.where( (swell_mask > 0.5) & (kn > kmin) , np.divide(Ekxky,Hhat2),0) 
         dkx=kx2[0,1]-kx2[0,0]
         dky=ky2[1,0]-ky2[0,0]
         varmask=np.sum(E_mask.flatten())*dkx*dky*(1+doublesided);  # WARNING: factor 2  is only correct if the mask is only over half of the spectral domain!!
@@ -393,33 +396,35 @@ def  SWOTspec_to_HsLm(Ekxky,kx2,ky2,swell_mask,Hhat2,trackangle,doublesided=1,km
         if np.abs(trackangle) > 90: 
           shift180=180
 
-        kn=np.sqrt(kx2**2+ky2**2)
-        m0=np.sum(E_mask.flatten())
-        mQ=np.sum((E_mask.flatten())**2)
-        Q18=np.sqrt(mQ/(m0**2*dkx*dky))/(2*np.pi)
+        m0=np.sum(E_mask[mask].flatten())
+        mQ=np.sum((E_mask[mask].flatten())**2)
         #inds=np.where(kn.flatten() > 5E-4)[0]+
         #mm1=np.sum(E_mask.flatten()[inds]/kn.flatten()[inds])
         #mmE=np.sum(E_mask.flatten()[inds]/np.sqrt(kn.flatten()[inds]))
         #mp1=np.sum(np.multiply(E_mask,kn).flatten())
-        mask = kn > kmin
+        
         mm1 = np.sum(E_mask[mask] / kn[mask])
         mmE = np.sum(E_mask[mask] / np.sqrt(kn[mask]))
         mp1 = np.sum(E_mask[mask] * kn[mask])
-        if m0 > 1E-6:
+        ##m0=np.sum(E_mask.flatten())
+        if ((m0 > 1E-6) & (np.isfinite(m0))):
+           Q18=np.sqrt(mQ/(m0**2*dkx*dky))/(2*np.pi)
            Lmm1=mm1/m0
            LE  =(mmE/m0)**2
            Lmp1=m0/mp1
-#           a1=np.sum(np.multiply(kx2.flatten()[inds]/kn.flatten()[inds],E_mask.flatten()[inds]))/m0
-#           b1=np.sum(np.multiply(ky2.flatten()[inds]/kn.flatten()[inds],E_mask.flatten()[inds]))/m0
            a1=np.sum((kx2[mask]/kn[mask])*E_mask[mask])/m0
+           mm=np.nanmax(np.abs((kx2[mask]/kn[mask])))
            b1=np.sum((ky2[mask]/kn[mask])*E_mask[mask])/m0
+           rr=max(0,2*(1-np.sqrt(a1**2+b1**2)))
+           sigth=np.sqrt(rr)*180/np.pi
         else:
            Lmm1=0.
            LE=0.
            Lmp1=0.
            a1=0.
-           b1=0.		           
-        sigth=np.sqrt(2*(1-np.sqrt(a1**2+b1**2)))*180/np.pi
+           b1=0.	
+           sigth=0.
+           Q18=0.	           
         dm=np.mod(90-(-trackangle+shift180+np.arctan2(b1,a1)*180/np.pi),360) # converted to direction from, nautical
     else :
         Hs=np.nan;Lmm1=np.nan;Lmp1=np.nan;LE=np.nan;dm=np.nan;sigth=np.nan;Q18=np.nan
