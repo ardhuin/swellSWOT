@@ -55,5 +55,9 @@ more is available on datarmor)
 (or if you are working on our datarmor cluster, here they are: ) 
 /home/datawork-WW3/PROJECT/SWOT
 
+### Other notebooks (e.g. for figures in papers ...)
+
+- Balanced_extraction_2D_v1.ipynb: adaptation of a notebook by Zhang for figures 1 and 2 in noise paper
+
 ## Installation 
 git clone --quiet https://github.com/ardhuin/swellSWOT
