@@ -8,6 +8,7 @@ import sys
 from scipy.interpolate import griddata
 from scipy.interpolate import NearestNDInterpolator
 from scipy.spatial import cKDTree
+from scipy import interpolate as interp
 
 ###################### 
 ######################  
@@ -145,7 +146,7 @@ def  wavespec_Efth_to_first3(efth,fren,dfreq,dirn,dth,cut=1E4)  :
     return Ef,th1m,sth1m,Hs,Tm0m1,Tm02,Qf,Qkk
 
 #############################################################################
-def  wavespec_Ekxky_to_first3(Ekxky,kx2,ky2,f_max=0.15,trackangle=0,depth=1000)  :
+def  wavespec_Ekxky_to_first3(Ekxky,kx2,ky2,f_min=0.025,df=0.005,f_max=0.15,trackangle=0,depth=1000)  :
     '''
     Computes first 3 moments from E(kx,ky) spectrum
     inputs :
@@ -164,17 +165,15 @@ def  wavespec_Ekxky_to_first3(Ekxky,kx2,ky2,f_max=0.15,trackangle=0,depth=1000) 
     Cg2=f2/(2*k2)  # need depth correction
     jacobian=k2/Cg2  
     
-    cartesian_interpolator = interp.RegularGridInterpolator((ky, kx), Ekxky*jacobian, method='linear', fill_value=None)
+    cartesian_interpolator = interp.RegularGridInterpolator((ky, kx), Ekxky*jacobian, bounds_error=False,   fill_value=0.0, method='linear') #, fill_value=None)
 # Define the polar grid (r, theta)
-    df=0.005
-    f_min = 0.025
-    num_f=int((f_max-f_min)/df)+1
+    num_f=int((f_max-f_min)/df)+2
 
     fren = np.linspace(f_min, f_max, num_f)
     dfreq=np.zeros(num_f)+df
     km=(2*np.pi*fren)**2/(grav*2*np.pi)   # cycles / meter
     
-    print('Interp:',fren)
+    #print('Interp:',fren)
     for ii in range(num_f):
        km[ii]=k_from_f(fren[ii],D=depth)/(2*np.pi)            # finite water depth
 

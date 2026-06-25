@@ -673,13 +673,19 @@ def FFT2D_two_arrays_nm_detrend_flag(arraya,arrayb,arrayf,dx,dy,n,m,isplot=0,det
 
 # Now works with averaged spectra
    
-    Eta=Eta/nspec
-    Etb=Etb/nspec
-    coh=abs((phase/nspec)**2)/(Eta*Etb)      # spectral coherence
-    ang=np.angle(phase)
-    crosr=np.real(phase)/nspec
-    angstd=np.std(np.angle(phases),axis=2)
-
+    if nspec > 0:
+        Eta=Eta/nspec
+        Etb=Etb/nspec
+        coh=abs((phase/nspec)**2)/(Eta*Etb)      # spectral coherence
+        ang=np.angle(phase)
+        crosr=np.real(phase)/nspec
+        angstd=np.std(np.angle(phases),axis=2)
+    else:
+        coh=Eta*0
+        ang=np.angle(phase)
+        crosr=np.real(phase)
+        angstd=Eta*0
+        
     return Eta,Etb,ang,angstd,coh,crosr,phases,kx2,ky2,dkxtile,dkytile,arrayad,arraybd,nspec
 
 
@@ -729,6 +735,33 @@ def detrend_2d_quadratic(data):
     trend = trend.reshape(rows, cols)
 
     # Detrend
+    detrended = data - trend
+    return detrended
+    
+def detrend_2d_quadratic_nan(data):
+    rows, cols = data.shape
+    x, y = np.meshgrid(np.arange(cols), np.arange(rows))
+    mask = np.isfinite(data)
+    x_flat = x[mask]
+    y_flat = y[mask]
+    Z_flat = data[mask]
+    if len(Z_flat) == 0:
+        return np.zeros_like(data)
+    X = np.column_stack([
+        np.ones_like(x_flat),
+        x_flat, y_flat,
+        x_flat**2, y_flat**2,
+        x_flat * y_flat
+    ])
+    beta, _, _, _ = np.linalg.lstsq(X, Z_flat, rcond=None)
+    trend = (
+        beta[0] +
+        beta[1] * x +
+        beta[2] * y +
+        beta[3] * x**2 +
+        beta[4] * y**2 +
+        beta[5] * x * y
+    )
     detrended = data - trend
     return detrended
 

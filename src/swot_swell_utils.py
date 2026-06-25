@@ -298,6 +298,10 @@ def wavespec_Efth_to_Efxfy_with_surfboard(
     Ekxky,kxm,kym,kx2,ky2,interp=wavespec_Efth_to_Ekxky(efth,modf,moddf,modang,moddth, \
           depth=depth,dkx=dkxf,dky=dkyf,nkx=nkx,nky=nky,doublesided=0,verbose=verbose,trackangle=trackangle,indices=interp)
           
+    #Etot2=np.sum(Ekxky[:,:].flatten())*dkxf*dkyf
+    #Hs2=4*np.sqrt(Etot2)
+    #print('Hs in wavespec_Efth_to_Efxfy_with_surfboard:',Hs,Hs2)
+
     nxavg=round(dkxr/dkxf)   # number of spectral pixels to average; change of resolution
     nyavg=round(dkyr/dkyf)
 
@@ -329,6 +333,10 @@ def wavespec_Efth_to_Efxfy_with_surfboard(
 
 # Coarsening of WW3 spectrum on kx,ky grid 
     Efxfyr = average_spectral_blocks(Ekxkyds, ix1, iy1, di1, dj1, nxavg, nyavg, nkxr, nkyr)
+    Etot2=np.sum(Efxfyr[:,:].flatten())*dkxf*dkyf*nxavg*nyavg
+    Hs2=4*np.sqrt(Etot2)
+    #print('Hs in wavespec_Efth_to_Efxfy_with_surfboard:',Hs,Hs2)
+
 #    kx2r   = average_spectral_blocks(kx2, ix1, iy1, di1, dj1, nxavg, nyavg, nkxr, nkyr)
     ESBr   = average_spectral_blocks(ESB, ix1, iy1, di1, dj1, nxavg, nyavg, nkxr, nkyr)
     ESSBr   = average_spectral_blocks(ESSB, ix1, iy1, di1, dj1, nxavg, nyavg, nkxr, nkyr)
@@ -396,13 +404,13 @@ def  SWOTspec_to_HsLm(Ekxky,kx2,ky2,swell_mask,Hhat2,trackangle,doublesided=1,km
         if np.abs(trackangle) > 90: 
           shift180=180
 
+        mask = kn > kmin
         m0=np.sum(E_mask[mask].flatten())
         mQ=np.sum((E_mask[mask].flatten())**2)
         #inds=np.where(kn.flatten() > 5E-4)[0]+
         #mm1=np.sum(E_mask.flatten()[inds]/kn.flatten()[inds])
         #mmE=np.sum(E_mask.flatten()[inds]/np.sqrt(kn.flatten()[inds]))
         #mp1=np.sum(np.multiply(E_mask,kn).flatten())
-        
         mm1 = np.sum(E_mask[mask] / kn[mask])
         mmE = np.sum(E_mask[mask] / np.sqrt(kn[mask]))
         mp1 = np.sum(E_mask[mask] * kn[mask])
@@ -759,7 +767,7 @@ def SWOTdefine_swell_mask(mybox,mybos,flbox,dy,dx,nm,mm,Eta,coh,ang,dlat,mask_ch
 
     if ((nm > n) or (mm > m)):
         # Recomputes spectra just for masking purposes
-        (Etam,Etbm,angm,angstdm,cohm,crosrm,phasesm,ky2m,kx2m,dkym,dkxm,detrendam,detrendbm,nspecm)=FFT2D_two_arrays_nm_detrend_flag(mybox,10**(0.1*mybos),flbox,dy,dx,nm,mm,detrend='quadratic')
+        (Etam,Etbm,angm,angstdm,cohm,crosrm,phasesm,ky2m,kx2m,dkym,dkxm,detrendam,detrendbm,nspecm)=FFT2D_two_arrays_nm_detrend_flag(mybox,mybos,flbox,dy,dx,nm,mm,detrend='quadratic')
 
     indc=np.where((cohm > cohthr))[0]
     ncoh=len(indc)
@@ -1390,15 +1398,15 @@ def  SWOT_spectra_for_one_track(cycle,tracks,mask_choice,number_res,spectra_res,
         ddll = xr.open_dataset(file_swot, group='left') # 82941 , 240
         ddlr = xr.open_dataset(file_swot, group='right') # 82941 , 240
 
-        varlis1=['ssh_karin_2','sig0_karin_2','ssh_karin_2_qual','latitude','longitude','time','ssh_karin_uncert'] 
-        varlist=['ssh_karin_2','sig0_karin_2','ssh_karin_2_qual','latitude','longitude','ssh_karin_uncert'] 
+        varlis1=['ssha_karin_2','sig0_karin_2','ssh_karin_2_qual','latitude','longitude','time','ssh_karin_uncert'] 
+        varlist=['ssha_karin_2','sig0_karin_2','ssh_karin_2_qual','latitude','longitude','ssh_karin_uncert'] 
         ddla = ddlr[varlis1].copy().pad(num_pixels=(279,0))  # Make a copy of the original ddll to avoid modifying it in place
 
         for thisvar in varlist :
             ddla[thisvar][:, 0:240] = np.flip(ddll[thisvar].values, axis=1) 
 
         unce_varname='ssh_karin_uncert'
-        ssh_varname= 'ssh_karin_2'
+        ssh_varname= 'ssha_karin_2'
         qual_varname='ssh_karin_2_qual'
         sig0_varname='sig0_karin_2'
 
@@ -1604,7 +1612,7 @@ def  SWOT_spectra_for_one_track(cycle,tracks,mask_choice,number_res,spectra_res,
              #print('BAD:',fracbad,fracfla)  
     # Computes spectrum from SWOT SSH data
     # Note: this uses tiles: we may use these higher resolution estimates to avoid duplication 
-             (Eta,Etb,ang,angstd,coh,crosr,phases,ky2,kx2,dky,dkx,detrenda,detrendb,nspec)=FFT2D_two_arrays_nm_detrend_flag(mybox,10**(0.1*mybos),flbox, \
+             (Eta,Etb,ang,angstd,coh,crosr,phases,ky2,kx2,dky,dkx,detrenda,detrendb,nspec)=FFT2D_two_arrays_nm_detrend_flag(mybox,mybos,flbox, \
                                                                                                      dy,dx,n,m,detrend='quadratic') 
 
              
@@ -1781,7 +1789,8 @@ def  SWOT_spectra_for_one_track(cycle,tracks,mask_choice,number_res,spectra_res,
                 SSHA,SIG0,FLAS,X,Y,sflip,signMTF,Look=SWOTarray_flip_north_up(dlat,'right',ssha[J1:J2,I1:I2], \
                                                                                     flas[J1:J2,I1:I2],sig0[J1:J2,I1:I2],Xmem,Ymem)
 
-                (Eta,Etb,ang,angstd,coh,crosr,phases,ky2,kx2,dky,dkx,detrenda,detrendb,nspec)=FFT2D_two_arrays_nm_detrend_flag(SSHA,10**(0.1*SIG0),FLAS,dy,dx,10,5,detrend='quadratic') 
+                #(Eta,Etb,ang,angstd,coh,crosr,phases,ky2,kx2,dky,dkx,detrenda,detrendb,nspec)=FFT2D_two_arrays_nm_detrend_flag(SSHA,10**(0.1*SIG0),FLAS,dy,dx,10,5,detrend='quadratic') 
+                (Eta,Etb,ang,angstd,coh,crosr,phases,ky2,kx2,dky,dkx,detrenda,detrendb,nspec)=FFT2D_two_arrays_nm_detrend_flag(SSHA,SIG0,FLAS,dy,dx,10,5,detrend='quadratic') 
                 sig0max=np.nanmax(sig0)
                 sig0min=np.nanmin(sig0)
                 sig0mean=np.nanmedian(sig0)
@@ -2276,16 +2285,13 @@ def  Hmodel(incognita,data)  :
     
     
     
-    
 import numpy as np
 import netCDF4 as nc
-#from scipy.interpolate import griddata
-from scipy.spatial import cKDTree
-
+from scipy.interpolate import griddata
 
 def correct_ssha_with_swot_mean(
     ncfile_path,
-    lat_2d, lon_2d, ssha_2d, side,
+    lat_2d, lon_2d, L2_variable, side,
     method='linear'
 ):
     """
@@ -2294,49 +2300,39 @@ def correct_ssha_with_swot_mean(
     Parameters:
     - ncfile_path: str, path to the SWOT mean SSH NetCDF file
     - lat_2d, lon_2d: 2D arrays, latitude and longitude of the L2 grid
-    - ssha_2d: 2D array, the SSHA to correct
+    - L2_variable: 2D array, the SSHA to correct
     - side:  0 or 1 indicating the side
     - method: str, interpolation method ('linear', 'nearest', 'cubic')
 
     Returns:
-    - ssha_corrected: 2D array, the corrected SSHA
+    - L2_corrected: 2D array, the corrected SSHA
     """
 
     # Load SWOT mean SSH
     with nc.Dataset(ncfile_path, 'r') as ncfile:
-        mss= ncfile['ssha_med'][side, :, :]  # shape: (2, 177, 25)
-        lat_mss = ncfile['latitude'][side,:,:]
-        lon_mss = ncfile['longitude'][side, :, :]
+        ssha_mean = ncfile['ssha_med'][:]  # shape: (2, 177, 25)
+        lat_swot = ncfile['latitude'][:]
+        lon_swot = ncfile['longitude'][:]
 
+    # Prepare SWOT data for interpolation
+    ssha_mean_side = ssha_mean[side, :, :]
    
-   
-    points = np.column_stack((lat_mss.ravel(), lon_mss.ravel()))
-    values = mss.ravel()
+    lat_swot_flat = lat_swot[side, :, :].flatten()
+    lon_swot_flat = lon_swot[side, :, :].flatten()
+    ssha_swot_flat = ssha_mean_side.flatten()
 
-    valid_src = np.isfinite(values)
+    # Initialize output
+    L2_corrected = np.zeros_like(L2_variable)
 
-    points = points[valid_src]
-    values = values[valid_src]
+    # Points to interpolate
+    points = np.column_stack((lat_swot_flat, lon_swot_flat))
+    values = ssha_swot_flat
+    query = np.column_stack((lat_2d, lon_2d))
 
-    tree = cKDTree(points)
+    # Interpolate
+    ssha_interp = griddata(points, values, query, method=method)
 
-    lat_flat = lat_2d.ravel()
-    lon_flat = lon_2d.ravel()
+    # Subtract from L2_variable
+    L2_corrected = L2_variable - ssha_interp
 
-    query = np.column_stack((lat_flat, lon_flat))
-
-    dist, idx = tree.query(query, k=8)
-    # avoid division by zero
-    weights = 1.0 / (dist + 1e-12)
-
-    # normalize
-    weights /= weights.sum(axis=1, keepdims=True)
-
-    # weighted interpolation
-    ssha_interp_flat = np.sum(values[idx] * weights, axis=1)
-    #ssha_interp_flat = values[idx]   # IMPORTANT: SAME SOURCE VALUES
-    ssha_interp = ssha_interp_flat.reshape(lat_2d.shape)
-
-    ssha_corrected = ssha_2d - ssha_interp
-
-    return ssha_corrected,ssha_interp
+    return L2_corrected
