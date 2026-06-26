@@ -10,9 +10,9 @@ http://dx.doi.org/10.13140/RG.2.2.32296.17925     Phase-resolved swells across o
 https://www.pnas.org/doi/10.1073/pnas.2513381122  Sizing the largest ocean waves using the SWOT mission
 https://www.nature.com/articles/s41467-026-71541-6 Swell-driven bursts of 26 s and 16 s seismic spectral peaks in the Gulf of Guinea
 
-(in prep) Noise or signal? Surface gravity waves in SWOT sea level measurements at wavelengths under 10 km
+(in prep) SWOT sea level noise at wavelengths under 10~km: implications for wave detection and analysis
 
-The most simple Toolbox (using surface elevation data) is "swot_swell_fig1.ipynb", it takes a sample of SWOT "unsmoothed" data and computes a wave spectrum from it. 
+The most simple script (using surface elevation data) is "swot_swell_fig1.ipynb", it takes a sample of SWOT "unsmoothed" data and computes a wave spectrum from it. 
 If you have co-located wave model output, it will also
 compare model and SWOT data.
 
